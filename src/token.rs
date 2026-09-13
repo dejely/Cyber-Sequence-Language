@@ -11,31 +11,19 @@
 #[derive(Debug, Clone, PartialEq)]
 pub enum TokenType {
     // Single-character tokens.
-    /// `(`.
     LeftParen,
-    /// `)`.
     RightParen,
-    /// `{`.
     LeftBrace,
-    /// `}`.
     RightBrace,
-    /// `[`.
     LeftBracket,
-    /// `]`.
     RightBracket,
-    /// `,`.
     Comma,
-    /// `.`.
     Dot,
-    /// `-`.
     Minus,
-    /// `+`.
     Plus,
-    /// `;`.
     Semicolon,
     /// `/`; comment syntax is not implemented yet.
     Slash,
-    /// `*`.
     Star,
 
     // One or two character tokens.
@@ -65,26 +53,15 @@ pub enum TokenType {
     Number,
 
     // Keywords.
-    /// Keyword `and`.
     And,
-    /// Keyword `class`.
     Class,
-    /// Keyword `else`.
     Else,
-    /// Keyword `true`; currently emitted without a boolean literal value.
     True,
-    /// Keyword `false`; currently emitted without a boolean literal value.
     False,
-    /// Keyword `fun`.
     Fun,
-    /// Keyword `for`.
     For,
-    /// Keyword `if`.
     If,
-
-    /// Keyword `var`.
     Var,
-    /// Keyword `print`.
     Print,
 
     // End of Input.
