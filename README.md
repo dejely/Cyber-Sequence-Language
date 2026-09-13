@@ -19,6 +19,7 @@
 | `*` | `STAR` | Multiplication |
 | `/` | `SLASH` | Division |
 | `;` | `SEMICOLON` | Terminates a statement |
+| `@` | `AT` | Introduces a resource reference, such as `@host` |
 
 ### One- or two-character tokens
 
@@ -61,6 +62,27 @@
 | `true` | `TRUE` | Boolean true value |
 | `var` | `VAR` | Declares a variable |
 | `while` | `WHILE` | Starts a `while` loop |
+
+### CSL keywords
+
+Planned keywords for Cyber Sequence Language (CSL).
+
+| Lexeme | Token Type | Purpose |
+|---|---|---|
+| `watch` | `WATCH` | Declares an event-monitoring rule |
+| `ability` | `ABILITY` | Declares a named ability |
+| `target` | `TARGET` | Specifies the target of an ability |
+| `source` | `SOURCE` | Specifies an event or log source |
+| `sequence` | `SEQUENCE` | Groups operation steps |
+| `require` | `REQUIRE` | Declares a required capability |
+| `capability` | `CAPABILITY` | Introduces a capability reference |
+| `count` | `COUNT` | Counts matching events |
+| `by` | `BY` | Groups events by a field |
+| `within` | `WITHIN` | Sets a query's time window |
+| `alert` | `ALERT` | Raises an alert |
+| `inspect` | `INSPECT` | Inspects a simulated target |
+| `isolate` | `ISOLATE` | Isolates a simulated target |
+| `execute` | `EXECUTE` | Requests execution of the declared operations |
 
 ### End-of-input token
 
