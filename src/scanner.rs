@@ -32,7 +32,7 @@ pub struct Scanner {
 }
 
 impl Scanner {
-    pub fn new(source: String) -> Self {`
+    pub fn new(source: String) -> Self {
         Scanner {
             source: source.chars().collect(),
             tokens: Vec::new(),
@@ -80,7 +80,7 @@ impl Scanner {
                 self.line
             )
         );
-        self.tokens// Return a copy of the tokens vector
+        self.tokens // Return a copy of the tokens vector
     }
 
     fn scan_token(&mut self) {
