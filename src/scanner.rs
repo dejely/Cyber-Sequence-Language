@@ -1,33 +1,12 @@
-use crate::token::{ Token, TokenType }; // Refers to the Token struct defined in token.rs
+//! Converts source text into tokens.
 
-/*
-NOTES:
-
-Use `&mut self` in function parameters
-for methods that need to change the existing scanner
-
-E.G. function advance changes self.current.
---------------------------------------------
-Use `&self` in function parameters
-for methods that are only for reading without changing the existing scanner.
-
-E.G. function is_at_end only reads self.current and self.source.len() without changing them.
-*/
-
-/*
-* Scanner struct and implementation
-   source code
-       ↓
-   scanner.rs
-       ↓
-   Vec<Token>
-*/
+use crate::token::{ Literal, Token, TokenType };
 
 pub struct Scanner {
     source: Vec<char>,
     tokens: Vec<Token>,
-    start: usize,
-    current: usize,
+    start: usize, // Start of the current token.
+    current: usize, // Next character to read.
     line: usize,
 }
 
@@ -42,49 +21,41 @@ impl Scanner {
         }
     }
 
-    // HELPERS BELOW
-    /* tell the scanner when it has reached the end of the source code
-        e.g. source = ['v', 'a', 'r']
-        current = 3
-        len = 3
-
-        Thus: current >= source.len() => true
-    */
     fn is_at_end(&self) -> bool {
         self.current >= self.source.len()
     }
 
-    // reads the next character in the source code and returns it.
+    // Caller must ensure input remains.
     fn advance(&mut self) -> char {
         let c = self.source[self.current];
         self.current += 1;
         c
     }
 
-    // safely looks ahead without moving current.
     fn peek(&self) -> char {
         if self.is_at_end() { '\0' } else { self.source[self.current] }
     }
 
-    pub fn scan_tokens(mut self) -> Vec<Token> {
+    /// Returns all tokens plus EOF, or the first scanning error.
+    pub fn scan_tokens(mut self) -> Result<Vec<Token>, String> {
         while !self.is_at_end() {
             self.start = self.current;
-            self.scan_token();
+            self.scan_token()?;
         }
 
         self.tokens.push(
             Token::new(
                 TokenType::Eof,
-                String::new(), //empty lexeme
+                String::new(), // EOF has no source spelling.
                 None,
                 self.line
             )
         );
-        self.tokens // Return a copy of the tokens vector
+        Ok(self.tokens)
     }
 
-    fn scan_token(&mut self) {
-        let c = self.advance(); // sets the current character to c and moves the current pointer forward by 1
+    fn scan_token(&mut self) -> Result<(), String> {
+        let c = self.advance();
 
         match c {
             '{' => self.add_token(TokenType::LeftBrace),
@@ -128,10 +99,61 @@ impl Scanner {
                     self.add_token(TokenType::Less)
                 }
             }
-            _ => {}
+            ' ' | '\r' | '\t' => {}
+            '\n' => self.line += 1,
+            '"' => self.string()?,
+            'a'..='z' | 'A'..='Z' | '_' => self.identifier(),
+            _ => return Err(format!("line {}: Unexpected character {:?}.", self.line, c)),
         }
+        Ok(())
     }
 
+    // Read the whole name before checking whether it is a keyword.
+    fn identifier(&mut self) {
+        while self.peek().is_ascii_alphanumeric() || self.peek() == '_' {
+            self.advance();
+        }
+        let text: String = self.source[self.start..self.current].iter().collect();
+        let token_type = match text.as_str() {
+            "and" => TokenType::And,
+            "class" => TokenType::Class,
+            "else" => TokenType::Else,
+            "true" => TokenType::True,
+            "false" => TokenType::False,
+            "fun" => TokenType::Fun,
+            "for" => TokenType::For,
+            "if" => TokenType::If,
+            "var" => TokenType::Var,
+            "print" => TokenType::Print,
+            _ => TokenType::Identifier,
+        };
+        self.add_token(token_type);
+    }
+
+    fn string(&mut self) -> Result<(), String> {
+        let opening_line = self.line;
+        while !self.is_at_end() && self.peek() != '"' {
+            if self.peek() == '\n' {
+                self.line += 1;
+            }
+            self.advance();
+        }
+        if self.is_at_end() {
+            return Err(format!("line {}: Unterminated string.", opening_line));
+        }
+        self.advance(); // Consume the closing quote.
+        let lexeme: String = self.source[self.start..self.current].iter().collect();
+        let value: String = self.source[self.start + 1..self.current - 1].iter().collect();
+        self.tokens.push(Token::new(
+            TokenType::String,
+            lexeme,
+            Some(Literal::String(value)),
+            opening_line,
+        ));
+        Ok(())
+    }
+
+    // Consume only if the next character matches.
     fn match_char(&mut self, expected: char) -> bool {
         if self.is_at_end() {
             return false;
@@ -146,15 +168,15 @@ impl Scanner {
     }
 
     fn add_token(&mut self, token_type: TokenType) {
-        let lexeme: String = self.source[self.start..self.current] // from start to finish of token
+        let lexeme: String = self.source[self.start..self.current]
             .iter()
-            .collect(); // build to a string
+            .collect();
 
         self.tokens.push(
             Token::new(
                 token_type,
                 lexeme,
-                None, // No literal value for now
+                None,
                 self.line
             )
         );
