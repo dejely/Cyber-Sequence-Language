@@ -1,0 +1,3 @@
+var first = 1; // ignored comment
+// comment-only line
+var second = 2;
