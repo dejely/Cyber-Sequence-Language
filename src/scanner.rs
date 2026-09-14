@@ -245,3 +245,21 @@ impl Scanner {
         );
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::Scanner;
+
+    #[test]
+    fn reports_multiple_invalid_characters_in_source_order() {
+        let result = Scanner::new("valid\n#\n?\n".to_string()).scan_tokens();
+        let error = result.expect_err("invalid characters should reject the scan");
+
+        assert_eq!(
+            error,
+            "line 2: Unexpected character '#'.\nline 3: Unexpected character '?'."
+        );
+        assert_eq!(error.matches('\n').count(), 1);
+        assert!(!error.ends_with('\n'));
+    }
+}
