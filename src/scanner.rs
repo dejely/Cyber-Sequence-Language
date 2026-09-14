@@ -1,6 +1,6 @@
 //! Converts source text into tokens.
 
-use crate::token::{ Literal, Token, TokenType };
+use crate::token::{Literal, Token, TokenType};
 
 pub struct Scanner {
     source: Vec<char>,
@@ -36,11 +36,18 @@ impl Scanner {
         if self.is_at_end() { '\0' } else { self.source[self.current] }
     }
 
-    /// Returns all tokens plus EOF, or the first scanning error.
+    /// Returns all tokens plus EOF, or all scanning errors.
     pub fn scan_tokens(mut self) -> Result<Vec<Token>, String> {
+        let mut errors = Vec::new();
         while !self.is_at_end() {
             self.start = self.current;
-            self.scan_token()?;
+            if let Err(message) = self.scan_token() {
+                errors.push(message);
+            }
+        }
+
+        if !errors.is_empty() {
+            return Err(errors.join("\n"));
         }
 
         self.tokens.push(
@@ -66,11 +73,20 @@ impl Scanner {
             ']' => self.add_token(TokenType::RightBracket),
             ',' => self.add_token(TokenType::Comma),
             '.' => self.add_token(TokenType::Dot),
+            '@' => self.add_token(TokenType::At),
             '-' => self.add_token(TokenType::Minus),
             '+' => self.add_token(TokenType::Plus),
             ';' => self.add_token(TokenType::Semicolon),
             '*' => self.add_token(TokenType::Star),
-            '/' => self.add_token(TokenType::Slash),
+            '/' => {
+                if self.match_char('/') {
+                    while self.peek() != '\n' && !self.is_at_end() {
+                        self.advance();
+                    }
+                } else {
+                    self.add_token(TokenType::Slash)
+                }
+            }
             '!' => {
                 if self.match_char('=') {
                     self.add_token(TokenType::BangEqual)
@@ -102,6 +118,7 @@ impl Scanner {
             ' ' | '\r' | '\t' => {}
             '\n' => self.line += 1,
             '"' => self.string()?,
+            '0'..='9' => self.number(),
             'a'..='z' | 'A'..='Z' | '_' => self.identifier(),
             _ => return Err(format!("line {}: Unexpected character {:?}.", self.line, c)),
         }
@@ -123,11 +140,57 @@ impl Scanner {
             "fun" => TokenType::Fun,
             "for" => TokenType::For,
             "if" => TokenType::If,
+            "nil" => TokenType::Nil,
+            "or" => TokenType::Or,
+            "return" => TokenType::Return,
+            "super" => TokenType::Super,
+            "this" => TokenType::This,
             "var" => TokenType::Var,
             "print" => TokenType::Print,
+            "while" => TokenType::While,
+            "watch" => TokenType::Watch,
+            "ability" => TokenType::Ability,
+            "target" => TokenType::Target,
+            "source" => TokenType::Source,
+            "sequence" => TokenType::Sequence,
+            "require" => TokenType::Require,
+            "capability" => TokenType::Capability,
+            "count" => TokenType::Count,
+            "by" => TokenType::By,
+            "within" => TokenType::Within,
+            "alert" => TokenType::Alert,
+            "inspect" => TokenType::Inspect,
+            "isolate" => TokenType::Isolate,
+            "execute" => TokenType::Execute,
             _ => TokenType::Identifier,
         };
         self.add_token(token_type);
+    }
+
+    fn number(&mut self) {
+        while self.peek().is_ascii_digit() {
+            self.advance();
+        }
+
+        // A dot belongs to a number only when it starts a fractional part.
+        if self.peek() == '.' {
+            let next = self.current + 1;
+            if next < self.source.len() && self.source[next].is_ascii_digit() {
+                self.advance();
+                while self.peek().is_ascii_digit() {
+                    self.advance();
+                }
+            }
+        }
+
+        let lexeme: String = self.source[self.start..self.current].iter().collect();
+        let value = lexeme.parse::<f64>().expect("scanner produced a valid number");
+        self.tokens.push(Token::new(
+            TokenType::Number,
+            lexeme,
+            Some(Literal::Number(value)),
+            self.line,
+        ));
     }
 
     fn string(&mut self) -> Result<(), String> {
@@ -180,5 +243,23 @@ impl Scanner {
                 self.line
             )
         );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Scanner;
+
+    #[test]
+    fn reports_multiple_invalid_characters_in_source_order() {
+        let result = Scanner::new("valid\n#\n?\n".to_string()).scan_tokens();
+        let error = result.expect_err("invalid characters should reject the scan");
+
+        assert_eq!(
+            error,
+            "line 2: Unexpected character '#'.\nline 3: Unexpected character '?'."
+        );
+        assert_eq!(error.matches('\n').count(), 1);
+        assert!(!error.ends_with('\n'));
     }
 }

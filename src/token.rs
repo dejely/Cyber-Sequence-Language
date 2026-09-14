@@ -7,7 +7,6 @@
 /// Classifies one scanned item independently of its spelling or literal value.
 ///
 /// Declaring a variant does not make the scanner recognize it automatically.
-/// In particular, numeric literals are represented here but are not scanned yet.
 #[derive(Debug, Clone, PartialEq)]
 pub enum TokenType {
     // Single-character tokens.
@@ -19,10 +18,11 @@ pub enum TokenType {
     RightBracket,
     Comma,
     Dot,
+    At,
     Minus,
     Plus,
     Semicolon,
-    /// `/`; comment syntax is not implemented yet.
+    /// `/`; a second slash starts a line comment.
     Slash,
     Star,
 
@@ -61,8 +61,30 @@ pub enum TokenType {
     Fun,
     For,
     If,
+    Nil,
+    Or,
+    Return,
+    Super,
+    This,
     Var,
     Print,
+    While,
+
+    // CSL keywords.
+    Watch,
+    Ability,
+    Target,
+    Source,
+    Sequence,
+    Require,
+    Capability,
+    Count,
+    By,
+    Within,
+    Alert,
+    Inspect,
+    Isolate,
+    Execute,
 
     // End of Input.
     /// Marks successful end of input; emitted once with an empty lexeme.
@@ -84,8 +106,8 @@ pub struct Token {
 
 /// A parsed value, distinct from the original source spelling in a token.
 ///
-/// The current scanner only constructs the string variant. Numbers, boolean
-/// values, and null are available for later implementation stages.
+/// The scanner currently constructs string and numeric variants. Boolean and
+/// null variants remain available for later parser stages.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Literal {
     /// A floating-point number.
@@ -135,6 +157,7 @@ impl std::fmt::Display for Token {
             TokenType::RightBracket => "RIGHT_BRACKET",
             TokenType::Comma => "COMMA",
             TokenType::Dot => "DOT",
+            TokenType::At => "AT",
             TokenType::Minus => "MINUS",
             TokenType::Plus => "PLUS",
             TokenType::Semicolon => "SEMICOLON",
@@ -159,8 +182,28 @@ impl std::fmt::Display for Token {
             TokenType::Fun => "FUN",
             TokenType::For => "FOR",
             TokenType::If => "IF",
+            TokenType::Nil => "NIL",
+            TokenType::Or => "OR",
+            TokenType::Return => "RETURN",
+            TokenType::Super => "SUPER",
+            TokenType::This => "THIS",
             TokenType::Var => "VAR",
             TokenType::Print => "PRINT",
+            TokenType::While => "WHILE",
+            TokenType::Watch => "WATCH",
+            TokenType::Ability => "ABILITY",
+            TokenType::Target => "TARGET",
+            TokenType::Source => "SOURCE",
+            TokenType::Sequence => "SEQUENCE",
+            TokenType::Require => "REQUIRE",
+            TokenType::Capability => "CAPABILITY",
+            TokenType::Count => "COUNT",
+            TokenType::By => "BY",
+            TokenType::Within => "WITHIN",
+            TokenType::Alert => "ALERT",
+            TokenType::Inspect => "INSPECT",
+            TokenType::Isolate => "ISOLATE",
+            TokenType::Execute => "EXECUTE",
             TokenType::Eof => "EOF",
         };
         let literal = match &self.literal {
