@@ -1,5 +1,6 @@
 //! CLI entry point for tokenizing source files.
 
+mod repl;
 mod scanner;
 mod token;
 
@@ -7,6 +8,11 @@ use scanner::Scanner;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = std::env::args().collect();
+
+    if args.get(1).map(String::as_str) == Some("--repl") {
+        repl::run_prompt()?;
+        return Ok(());
+    }
 
     // Preserve the Lab 0 greeting.
     if args.get(1).map(String::as_str) != Some("--tokenize") {
