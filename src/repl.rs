@@ -1,6 +1,7 @@
 use std::io::{ self, Write };
 
 use crate::scanner::Scanner;
+use crate::parser::Parser;
 
 pub fn run_prompt() -> io::Result<()> {
     loop {
@@ -24,4 +25,21 @@ pub fn run_prompt() -> io::Result<()> {
     }
 
     Ok(())
+}
+
+pub fn run_parse() -> io::Result<()> {
+    loop {
+        print!("> ");
+
+        io::stdout().flush()?;
+
+        let mut source = String::new();
+
+        // Ctrl Z or C end the REPL
+        if io::stdin().readline(&mut source)? == 0 {
+            break;
+        }
+
+        //match Scanner::new(source)
+    }
 }
