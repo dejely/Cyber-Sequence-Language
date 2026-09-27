@@ -1,6 +1,12 @@
 # .github/workflows/test.yml
 name: lab-tests
-on: [push]
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
 jobs:
   test:
     runs-on: ubuntu-latest
