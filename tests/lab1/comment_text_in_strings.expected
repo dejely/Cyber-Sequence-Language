@@ -1,0 +1,3 @@
+Token(type=STRING, lexeme="// not a comment", literal=// not a comment, line=1)
+Token(type=STRING, lexeme="/* text */", literal=/* text */, line=1)
+Token(type=EOF, lexeme=, literal=null, line=1)
