@@ -1,0 +1,3 @@
+Token(type=STRING, lexeme="a\nb", literal=a\nb, line=1)
+Token(type=IDENTIFIER, lexeme=next, literal=null, line=2)
+Token(type=EOF, lexeme=, literal=null, line=3)
