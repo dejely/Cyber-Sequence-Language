@@ -115,3 +115,71 @@ fn numeric_overflow_reports_following_errors_in_order() {
         .as_bytes()
     );
 }
+
+fn tokenize_fixture(name: &str) -> Output {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/lab1")
+        .join(name);
+    run_with_input(&["--tokenize", path.to_str().expect("fixture path")], "")
+}
+
+#[test]
+fn lexical_rejections_report_exact_lines_and_no_stdout() {
+    for (fixture, diagnostic) in [
+        (
+            "invalid.csl",
+            "line 2: Unexpected character '#'.\nline 3: Unexpected character '?'.\n",
+        ),
+        ("unterminated.csl", "line 1: Unterminated string.\n"),
+        (
+            "mixed_errors.csl",
+            concat!(
+                "line 2: Unexpected character '#'.\n",
+                "line 3: Unexpected character '?'.\n",
+                "line 4: Unterminated string.\n"
+            ),
+        ),
+    ] {
+        let result = tokenize_fixture(fixture);
+        assert_eq!(result.status.code(), Some(65), "{fixture}");
+        assert!(result.stdout.is_empty(), "{fixture}");
+        assert_eq!(result.stderr, diagnostic.as_bytes(), "{fixture}");
+    }
+}
+
+#[test]
+fn every_scanner_fixture_has_repeatable_output_and_correct_streams() {
+    let directory = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/lab1");
+    let mut paths: Vec<_> = std::fs::read_dir(directory)
+        .expect("read fixtures")
+        .map(|entry| entry.expect("fixture entry").path())
+        .filter(|path| path.extension().is_some_and(|ext| ext == "csl"))
+        .collect();
+    paths.sort();
+    assert!(!paths.is_empty());
+    for path in paths {
+        let name = path.file_name().unwrap().to_str().unwrap();
+        let first = tokenize_fixture(name);
+        let second = tokenize_fixture(name);
+        let exit_path = path.with_extension("exit");
+        let expected_exit = if exit_path.exists() {
+            std::fs::read_to_string(exit_path)
+                .unwrap()
+                .trim()
+                .parse::<i32>()
+                .unwrap()
+        } else {
+            0
+        };
+        assert_eq!(first.status.code(), Some(expected_exit), "{name}");
+        assert_eq!(second.status.code(), Some(expected_exit), "{name}");
+        assert_eq!(first.stdout, second.stdout, "stdout changed: {name}");
+        assert_eq!(first.stderr, second.stderr, "stderr changed: {name}");
+        if expected_exit == 0 {
+            assert!(first.stderr.is_empty(), "unexpected diagnostic: {name}");
+        } else {
+            assert!(first.stdout.is_empty(), "tokens leaked: {name}");
+            assert!(!first.stderr.is_empty(), "missing diagnostic: {name}");
+        }
+    }
+}
