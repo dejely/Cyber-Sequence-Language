@@ -217,24 +217,26 @@ The lexeme preserves source spelling, while the literal stores the parsed value.
 Nonliteral tokens print `literal=null`; `true`, `false`, and `nil` currently have
 keyword token types and no parsed literal. Line numbers are one-based.
 
-**Pending Step 4:** escape backslash as `\\`, LF as `\n`, CR as `\r`, and tab as
+**Implemented:** escape backslash as `\\`, LF as `\n`, CR as `\r`, and tab as
 `\t` in displayed lexemes and string literal values. Other characters, including
 quotes, retain their existing presentation. For example, the multiline string
-above will print as a single record:
+above prints as a single record:
 
 ```text
 Token(type=STRING, lexeme="a\nb", literal=a\nb, line=1)
 ```
 
-A source string containing a literal backslash followed by `n` will instead print:
+A source string containing a literal backslash followed by `n` instead prints:
 
 ```text
 Token(type=STRING, lexeme="a\\nb", literal=a\\nb, line=1)
 ```
 
-Currently, text fields print raw contents, so actual newlines split a token across
-physical lines. Display escaping will keep records readable without changing
-stored lexemes or literal values or adding source-language escape processing.
+Text fields escape these four characters at display time, keeping token records
+on one physical line for LF/CR-containing strings. Stored lexemes and literal
+values are unchanged, and source-language escape processing is still unsupported.
+Escaping backslashes distinguishes literal backslash-plus-`n` from an actual LF.
+Other characters, including Unicode text and punctuation, pass through unchanged.
 
 ### Errors and pending interface changes
 
@@ -300,3 +302,4 @@ error is printed on stderr and the prompt returns, so entering `#` followed by
 `print x;` still scans the second line. End input with EOF (Ctrl-D on Unix-like
 terminals) to exit cleanly. The REPL cannot accumulate multiline strings across
 prompts; use `./run --tokenize <file>` for multiline source files.
+

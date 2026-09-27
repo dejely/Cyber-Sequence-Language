@@ -144,8 +144,8 @@ impl Token {
 /// Formats tokens in the text layout used by the CLI and `.expected` fixtures.
 ///
 /// Token names use uppercase words separated by underscores. Missing literals
-/// and explicit null values both print as `null`. Text is written as stored,
-/// without escaping embedded newlines or adding quotes around literal values.
+/// and explicit null values both print as `null`. Backslash, LF, CR, and tab
+/// are escaped for display only; stored text and quote presentation stay intact.
 impl std::fmt::Display for Token {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let token_type = match self.token_type {
@@ -208,7 +208,7 @@ impl std::fmt::Display for Token {
         };
         let literal = match &self.literal {
             Some(Literal::Number(value)) => value.to_string(),
-            Some(Literal::String(value)) => value.clone(),
+            Some(Literal::String(value)) => escape_token_text(value),
             Some(Literal::Boolean(value)) => value.to_string(),
             Some(Literal::Null) | None => "null".to_string(),
         };
@@ -216,9 +216,72 @@ impl std::fmt::Display for Token {
             f,
             "Token(type={}, lexeme={}, literal={}, line={})",
             token_type,
-            self.lexeme,
+            escape_token_text(&self.lexeme),
             literal,
             self.line
         )
+    }
+}
+
+// One pass keeps a source backslash distinct from an escape added for display.
+fn escape_token_text(text: &str) -> String {
+    let mut escaped = String::with_capacity(text.len());
+    for character in text.chars() {
+        match character {
+            '\\' => escaped.push_str("\\\\"),
+            '\n' => escaped.push_str("\\n"),
+            '\r' => escaped.push_str("\\r"),
+            '\t' => escaped.push_str("\\t"),
+            _ => escaped.push(character),
+        }
+    }
+    escaped
+}
+
+#[cfg(test)]
+mod display_tests {
+    use super::{Literal, Token, TokenType};
+    use crate::scanner::Scanner;
+
+    #[test]
+    fn scanned_strings_keep_values_and_positions_after_display() {
+        let source = "\"a\nb\" \"a\\nb\" \"\t\r\" \"\" \"café\" next";
+        let tokens = Scanner::new(source.to_string()).scan_tokens().unwrap();
+        let before = tokens.clone();
+        let expected = [
+            r#"Token(type=STRING, lexeme="a\nb", literal=a\nb, line=1)"#,
+            r#"Token(type=STRING, lexeme="a\\nb", literal=a\\nb, line=2)"#,
+            r#"Token(type=STRING, lexeme="\t\r", literal=\t\r, line=2)"#,
+            r#"Token(type=STRING, lexeme="", literal=, line=2)"#,
+            r#"Token(type=STRING, lexeme="café", literal=café, line=2)"#,
+            "Token(type=IDENTIFIER, lexeme=next, literal=null, line=2)",
+            "Token(type=EOF, lexeme=, literal=null, line=2)",
+        ];
+        for (token, expected) in tokens.iter().zip(expected) {
+            assert_eq!(token.to_string(), expected);
+            assert_eq!(token.to_string(), expected);
+        }
+        assert_eq!(tokens, before);
+        assert_eq!(tokens.len(), expected.len());
+        assert_eq!(tokens[0].lexeme, "\"a\nb\"");
+        assert_eq!(tokens[0].literal, Some(Literal::String("a\nb".to_string())));
+        assert_eq!(
+            tokens[1].literal,
+            Some(Literal::String("a\\nb".to_string()))
+        );
+    }
+
+    #[test]
+    fn display_preserves_quotes_and_ordinary_punctuation() {
+        let token = Token::new(
+            TokenType::String,
+            "\"a,b=(é)\"".to_string(),
+            Some(Literal::String("a,b=(é)".to_string())),
+            7,
+        );
+        assert_eq!(
+            token.to_string(),
+            r#"Token(type=STRING, lexeme="a,b=(é)", literal=a,b=(é), line=7)"#
+        );
     }
 }
