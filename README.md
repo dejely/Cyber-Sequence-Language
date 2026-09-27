@@ -182,7 +182,7 @@ are documentation, not regular expressions used by the implementation.
 | Numbers | `[0-9]+(\.[0-9]+)?`; `42` and `3.14` produce numeric literals stored as `f64`, with normal floating-point rounding | Implemented |
 | Numeric boundaries | `.5` becomes `DOT NUMBER(5)`; `3.` becomes `NUMBER(3) DOT`; `3.toString` becomes `NUMBER(3) DOT IDENTIFIER(toString)` | Implemented |
 | Signs and adjacent names | `-2` becomes `MINUS NUMBER(2)`; `123event` becomes `NUMBER(123) IDENTIFIER(event)` | Implemented; these are not scanner errors |
-| Numeric range | Require a finite `f64`; a source number consisting of 400 consecutive `9` digits must be rejected | **Pending Step 3:** currently accepted with literal `inf` |
+| Numeric range | Require a finite `f64`; a source number consisting of 400 consecutive `9` digits must be rejected | Implemented; rejects with exit 65 |
 | Strings | Double quotes delimit text; `"hello"` retains quotes in its lexeme and stores `hello` as its literal; `""` stores an empty string | Implemented |
 | Source escapes | No escape processing: `"a\nb"` stores the four characters `a`, backslash, `n`, `b`; a backslash does not protect a following quote | Implemented |
 | Multiline strings | Actual newlines inside quotes are allowed; the example below starts on line 1 and places `next` on line 2 | Implemented; string token uses its opening line |
@@ -242,20 +242,23 @@ An unexpected character such as `#` reports
 `line 1: Unexpected character '#'.`; an unclosed `"hello` reports
 `line 1: Unterminated string.`. The scanner collects errors in source order,
 continues where input remains, and rejects the file with exit 65, diagnostics on
-stderr, and no stdout. Clean file scans exit 0. Numeric-range rejection remains
-pending Step 3; its exact diagnostic will be documented with that implementation.
+stderr, and no stdout. Clean file scans exit 0. Numeric conversion failure or overflow to a nonfinite `f64` reports
+`line 1: Numeric literal out of range.` (using the actual source line). The whole
+number is consumed before rejection, so later errors are still reported. A file
+with an oversized number followed by `#` reports both errors, emits no tokens,
+and exits 65. Finite rounding and underflow to zero remain accepted.
 
 | Interface or environment | Current behavior | Agreed target |
 | --- | --- | --- |
 | `./run --tokenize tests/lab1/categories.csl` | Prints tokens | Preserve |
 | `./run --repl` | Scans each input line; a bad line does not end the session | Preserve as an alias |
-| `./run` | Prints the Lab 0 greeting | **Step 2:** start the REPL |
+| `./run` | Starts the REPL | Implemented in Step 2 |
 | `./run tests/lab0/hello.src` | Prints `Hello, JM & Dejel!` | Preserve legacy Lab 0 behavior |
 | Rust toolchain | `stable` in `rust-toolchain.toml` | **Step 8:** pin audited version `1.98.0` |
 
 CSL source uses `.csl`; the `.src` Lab 0 fixture remains a compatibility exception.
-The default REPL change will satisfy the PDF's no-argument contract while keeping
-the earlier harness invocation working.
+The default REPL satisfies the PDF's no-argument contract while keeping the
+earlier harness invocation working.
 
 ### Intended syntax and deferred semantics
 
@@ -286,3 +289,14 @@ or inspection. The full course-template README reorganization is Step 6.
 | ---------------- | ------------------------------------------------------------------------- |
 | `src/token.rs`   | Defines `TokenType`, `Literal`, and `Token`                               |
 | `src/scanner.rs` | Reads the raw source code character by character and turns it into tokens |
+
+## Running the scanner REPL
+
+Build with `./build.sh`, then run `./run` (or the equivalent `./run --repl`).
+Each `> ` prompt accepts one line and prints its tokens. For example, enter
+`var x = 1;` to see a declaration token stream; variables are not evaluated.
+Each line is scanned independently, with line numbering starting at 1. A lexical
+error is printed on stderr and the prompt returns, so entering `#` followed by
+`print x;` still scans the second line. End input with EOF (Ctrl-D on Unix-like
+terminals) to exit cleanly. The REPL cannot accumulate multiline strings across
+prompts; use `./run --tokenize <file>` for multiline source files.

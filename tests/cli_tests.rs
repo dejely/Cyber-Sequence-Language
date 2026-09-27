@@ -73,3 +73,45 @@ fn lab0_file_invocation_preserves_the_greeting() {
     assert_eq!(result.stdout, b"Hello, JM & Dejel!\n");
     assert!(result.stderr.is_empty());
 }
+
+#[test]
+fn numeric_overflow_rejects_file_without_stdout() {
+    let result = run_with_input(
+        &[
+            "--tokenize",
+            concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/tests/lab1/numeric_overflow.csl"
+            ),
+        ],
+        "",
+    );
+    assert_eq!(result.status.code(), Some(65));
+    assert!(result.stdout.is_empty());
+    assert_eq!(result.stderr, b"line 1: Numeric literal out of range.\n");
+}
+
+#[test]
+fn numeric_overflow_reports_following_errors_in_order() {
+    let result = run_with_input(
+        &[
+            "--tokenize",
+            concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/tests/lab1/numeric_overflow_recovery.csl"
+            ),
+        ],
+        "",
+    );
+    assert_eq!(result.status.code(), Some(65));
+    assert!(result.stdout.is_empty());
+    assert_eq!(
+        result.stderr,
+        concat!(
+            "line 2: Numeric literal out of range.\n",
+            "line 2: Unexpected character '#'.\n",
+            "line 3: Unexpected character '?'.\n"
+        )
+        .as_bytes()
+    );
+}
