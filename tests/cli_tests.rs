@@ -81,7 +81,7 @@ fn numeric_overflow_rejects_file_without_stdout() {
             "--tokenize",
             concat!(
                 env!("CARGO_MANIFEST_DIR"),
-                "/tests/lab1/numeric_overflow.csl"
+                "/tests/lab1/numbers/numeric_overflow.csl"
             ),
         ],
         "",
@@ -98,7 +98,7 @@ fn numeric_overflow_reports_following_errors_in_order() {
             "--tokenize",
             concat!(
                 env!("CARGO_MANIFEST_DIR"),
-                "/tests/lab1/numeric_overflow_recovery.csl"
+                "/tests/lab1/numbers/numeric_overflow_recovery.csl"
             ),
         ],
         "",
@@ -127,12 +127,12 @@ fn tokenize_fixture(name: &str) -> Output {
 fn lexical_rejections_report_exact_lines_and_no_stdout() {
     for (fixture, diagnostic) in [
         (
-            "invalid.csl",
+            "errors/invalid.csl",
             "line 2: Unexpected character '#'.\nline 3: Unexpected character '?'.\n",
         ),
-        ("unterminated.csl", "line 1: Unterminated string.\n"),
+        ("strings/unterminated.csl", "line 1: Unterminated string.\n"),
         (
-            "mixed_errors.csl",
+            "errors/mixed_errors.csl",
             concat!(
                 "line 2: Unexpected character '#'.\n",
                 "line 3: Unexpected character '?'.\n",
@@ -150,15 +150,23 @@ fn lexical_rejections_report_exact_lines_and_no_stdout() {
 #[test]
 fn every_scanner_fixture_has_repeatable_output_and_correct_streams() {
     let directory = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/lab1");
-    let mut paths: Vec<_> = std::fs::read_dir(directory)
-        .expect("read fixtures")
-        .map(|entry| entry.expect("fixture entry").path())
-        .filter(|path| path.extension().is_some_and(|ext| ext == "csl"))
-        .collect();
+    fn collect_sources(directory: &std::path::Path, paths: &mut Vec<std::path::PathBuf>) {
+        for entry in std::fs::read_dir(directory).expect("read fixtures") {
+            let entry = entry.expect("fixture entry");
+            let path = entry.path();
+            if entry.file_type().expect("fixture type").is_dir() {
+                collect_sources(&path, paths);
+            } else if path.extension().is_some_and(|ext| ext == "csl") {
+                paths.push(path);
+            }
+        }
+    }
+    let mut paths = Vec::new();
+    collect_sources(&directory, &mut paths);
     paths.sort();
     assert!(!paths.is_empty());
     for path in paths {
-        let name = path.file_name().unwrap().to_str().unwrap();
+        let name = path.strip_prefix(&directory).unwrap().to_str().unwrap();
         let first = tokenize_fixture(name);
         let second = tokenize_fixture(name);
         let exit_path = path.with_extension("exit");
