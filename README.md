@@ -252,7 +252,7 @@ and exits 65. Finite rounding and underflow to zero remain accepted.
 
 | Interface or environment | Current behavior | Agreed target |
 | --- | --- | --- |
-| `./run --tokenize tests/lab1/categories.csl` | Prints tokens | Preserve |
+| `./run --tokenize tests/lab1/coverage/categories.csl` | Prints tokens | Preserve |
 | `./run --repl` | Scans each input line; a bad line does not end the session | Preserve as an alias |
 | `./run` | Starts the REPL | Implemented in Step 2 |
 | `./run tests/lab0/hello.src` | Prints `Hello, JM & Dejel!` | Preserve legacy Lab 0 behavior |
