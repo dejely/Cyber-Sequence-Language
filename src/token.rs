@@ -49,7 +49,7 @@ pub enum TokenType {
     Identifier,
     /// Text enclosed in double quotes, with a corresponding string literal.
     String,
-    /// Reserved for numeric literals; the scanner does not emit this yet.
+    /// An integer or decimal spelling with a finite numeric literal.
     Number,
 
     // Keywords.
@@ -106,18 +106,14 @@ pub struct Token {
 
 /// A parsed value, distinct from the original source spelling in a token.
 ///
-/// The scanner currently constructs string and numeric variants. Boolean and
-/// null variants remain available for later parser stages.
+/// Only numbers and strings carry parsed values at the scanner stage.
+/// Boolean and nil spellings are keyword tokens with no literal value.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Literal {
     /// A floating-point number.
     Number(f64),
     /// String contents without the surrounding source quotes.
     String(String),
-    /// A boolean value, distinct from the `True` and `False` keyword categories.
-    Boolean(bool),
-    /// An explicit null value; `None` on a token means no literal was supplied.
-    Null,
 }
 
 impl Token {
@@ -129,7 +125,7 @@ impl Token {
         token_type: TokenType,
         lexeme: String,
         literal: Option<Literal>,
-        line: usize
+        line: usize,
     ) -> Self {
         Self {
             // Field shorthand uses the parameter with the same name.
@@ -144,7 +140,7 @@ impl Token {
 /// Formats tokens in the text layout used by the CLI and `.expected` fixtures.
 ///
 /// Token names use uppercase words separated by underscores. Missing literals
-/// and explicit null values both print as `null`. Backslash, LF, CR, and tab
+/// print as `null`. Backslash, LF, CR, and tab
 /// are escaped for display only; stored text and quote presentation stay intact.
 impl std::fmt::Display for Token {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -209,8 +205,7 @@ impl std::fmt::Display for Token {
         let literal = match &self.literal {
             Some(Literal::Number(value)) => value.to_string(),
             Some(Literal::String(value)) => escape_token_text(value),
-            Some(Literal::Boolean(value)) => value.to_string(),
-            Some(Literal::Null) | None => "null".to_string(),
+            None => "null".to_string(),
         };
         write!(
             f,

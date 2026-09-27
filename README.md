@@ -32,8 +32,9 @@ not dependencies of the three-month language prototype.
 
 The executable is `target/release/cmsc124-interpreter`, invoked by `./run`.
 Rebuild after source changes; `./run` does not build automatically. On Windows,
-use Git Bash. Node/Prettier configuration is development tooling, not required
-to build or run the interpreter.
+use Git Bash. Node/npm is optional: `npm run format` and `npm run format:check` are aliases
+for `cargo fmt` and `cargo fmt --check`. VS Code uses the rust-analyzer extension
+for Rust formatting on save; rustfmt is the shared formatter.
 
 ## Running it
 
@@ -355,9 +356,10 @@ cargo test --locked
 
 Do not commit the downloaded harness. The existing GitHub Actions workflow runs
 both fixture folders on push; local success does not establish remote CI status.
-There are no Lab 2–5 suites yet. Additional engineering checks are `cargo check
---locked`, `cargo clippy --locked --all-targets`, and `cargo fmt --check`; current
-formatting failures and unused-variant warnings are noted below.
+There are no Lab 2–5 suites yet. Additional engineering checks are
+`cargo check --locked`, `cargo clippy --locked --all-targets`, and
+`cargo fmt --check`. These check the compiled scanner and tests; the unreferenced
+parser draft is outside the current Cargo module graph.
 
 ## Sample code
 
@@ -426,9 +428,9 @@ Token(type=EOF, lexeme=, literal=null, line=3)
 - REPL input is processed one line at a time; multiline strings require files.
 - Diagnostics report lines, not columns. CLI option validation and OS-error
   formatting are not a stable language interface yet.
-- Rust `stable` is not an exact toolchain pin. Existing unused Boolean/Null literal
-  variants cause warnings, and `cargo fmt --check` reports formatting differences.
-  Cleanup and CI/toolchain hardening remain Steps 7–8.
+- Rust `stable` is not an exact toolchain pin. CI/toolchain hardening remains
+  Step 8. The uncompiled parser draft still needs its own implementation and
+  validation; clean scanner checks do not establish parser readiness.
 
 ## Changelog
 
