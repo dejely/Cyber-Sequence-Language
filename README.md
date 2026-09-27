@@ -1,5 +1,9 @@
 # Design and Implementation of Programming Languages(CMSC124): Interpreter
 
+This repository currently implements scanning only. Token purposes below describe
+intended language semantics; declarations, expressions, and CSL operations are
+not parsed or executed yet.
+
 ## Lexical Grammar
 
 ### Single-character tokens
@@ -48,8 +52,8 @@ Identifiers are used to name variables, functions, classes, properties, and othe
 
 **Rules:**
 
-* The first character must be an uppercase letter, lowercase letter, or underscore (`_`).
-* Subsequent characters may be uppercase letters, lowercase letters, digits (`0-9`), or underscores.
+* The first character must be an ASCII uppercase letter, ASCII lowercase letter, or underscore (`_`).
+* Subsequent characters may be ASCII uppercase letters, ASCII lowercase letters, digits (`0-9`), or underscores.
 * Identifiers are case-sensitive.
 * Reserved keywords cannot be used as identifiers.
 
@@ -61,14 +65,14 @@ identifier → [A-Za-z_][A-Za-z0-9_]*
 
 **Examples:**
 
-| Lexeme       | Valid? | Token Type                                              |
+| Lexeme       | Single identifier? | Token Type                                              |
 | ------------ | ------ | ------------------------------------------------------- |
 | `total`      | Yes    | `IDENTIFIER`                                            |
 | `user_name`  | Yes    | `IDENTIFIER`                                            |
 | `_count`     | Yes    | `IDENTIFIER`                                            |
 | `event123`   | Yes    | `IDENTIFIER`                                            |
 | `MyVariable` | Yes    | `IDENTIFIER`                                            |
-| `123event`   | No     | `NUMBER` followed by an invalid identifier              |
+| `123event`   | No     | `NUMBER(123)` followed by `IDENTIFIER(event)`; no lexical error              |
 | `user-name`  | No     | `IDENTIFIER` followed by `MINUS` and another identifier |
 
 ### Keywords
@@ -109,7 +113,7 @@ and approved systems. The language should receive a simple verification result,
 such as an authorized credential identity or a rejection, rather than expose
 raw RFID access to every rule.
 
-### CSL features
+### Planned CSL features
 
 * Event and log-source monitoring with `watch` and `source`.
 * Rule inputs that identify a `target`, a `require`d capability, and an
@@ -165,14 +169,116 @@ rules and runtime behavior before they become usable CSL statements.
 
 ## Language Design Decisions
 
-* `{}` creates blocks.
-* `[]` is reserved for arrays/indexing.
-* `;` ends statements.
-* `()` groups expressions and calls functions.
-* Identifiers start with a letter or underscore and may contain letters, digits, and underscores.
-* Identifiers are case-sensitive.
-* Reserved keywords cannot be used as identifiers.
-* Planned keywords include `if`, `else`, `for`, `fun`, `and`, and `var`.
+### Agreed lexical rules
+
+These rules describe the scanner unless a row is explicitly marked pending.
+Token sequences below omit the final `EOF` for brevity. The grammar patterns
+are documentation, not regular expressions used by the implementation.
+
+| Area | Rule and concrete example | Implementation status |
+| --- | --- | --- |
+| Identifiers | ASCII `[A-Za-z_][A-Za-z0-9_]*`; `_host2` is one identifier; `Host` and `host` are distinct spellings | Implemented |
+| Keywords | Match the complete name: `if` is `IF`, but `iffy` and `If` are identifiers | Implemented |
+| Numbers | `[0-9]+(\.[0-9]+)?`; `42` and `3.14` produce numeric literals stored as `f64`, with normal floating-point rounding | Implemented |
+| Numeric boundaries | `.5` becomes `DOT NUMBER(5)`; `3.` becomes `NUMBER(3) DOT`; `3.toString` becomes `NUMBER(3) DOT IDENTIFIER(toString)` | Implemented |
+| Signs and adjacent names | `-2` becomes `MINUS NUMBER(2)`; `123event` becomes `NUMBER(123) IDENTIFIER(event)` | Implemented; these are not scanner errors |
+| Numeric range | Require a finite `f64`; a source number consisting of 400 consecutive `9` digits must be rejected | **Pending Step 3:** currently accepted with literal `inf` |
+| Strings | Double quotes delimit text; `"hello"` retains quotes in its lexeme and stores `hello` as its literal; `""` stores an empty string | Implemented |
+| Source escapes | No escape processing: `"a\nb"` stores the four characters `a`, backslash, `n`, `b`; a backslash does not protect a following quote | Implemented |
+| Multiline strings | Actual newlines inside quotes are allowed; the example below starts on line 1 and places `next` on line 2 | Implemented; string token uses its opening line |
+| Comments | `x // note` emits only the identifier before EOF; comments run to newline or EOF; `"//"` is a string | Implemented; block and nested comments are not supported |
+| Whitespace | Space, tab, CR, and LF outside strings emit no tokens; `x` followed by LF then `y` puts `y` on line 2 | Implemented; LF increments the line, CR is ignored, so CRLF counts once |
+| Operators | Prefer the complete operator: `!=` is `BANG_EQUAL`, while `!` is `BANG` | Implemented |
+| Resource references | `@auth_logs` becomes `AT IDENTIFIER(auth_logs)` | Tokenization implemented; resource lookup deferred |
+| EOF | Empty input produces only `EOF` on line 1 | Implemented |
+
+Multiline source example (the newline inside the string is an actual newline):
+
+```text
+"a
+b" next
+```
+
+The agreed numeric-range restriction supplies the design-specific third rejection
+case requested by the assignment. Choosing finite numbers is our language policy,
+not a PDF requirement. It avoids silently converting an oversized source value
+into infinity. Tiny values may round to zero under `f64` conversion; exact decimal
+arithmetic, exponent syntax, and arbitrary-precision numbers are not supported.
+
+### Token values and printed representation
+
+Current output uses this layout:
+
+```text
+Token(type=STRING, lexeme="hello", literal=hello, line=1)
+```
+
+The lexeme preserves source spelling, while the literal stores the parsed value.
+Nonliteral tokens print `literal=null`; `true`, `false`, and `nil` currently have
+keyword token types and no parsed literal. Line numbers are one-based.
+
+**Pending Step 4:** escape backslash as `\\`, LF as `\n`, CR as `\r`, and tab as
+`\t` in displayed lexemes and string literal values. Other characters, including
+quotes, retain their existing presentation. For example, the multiline string
+above will print as a single record:
+
+```text
+Token(type=STRING, lexeme="a\nb", literal=a\nb, line=1)
+```
+
+A source string containing a literal backslash followed by `n` will instead print:
+
+```text
+Token(type=STRING, lexeme="a\\nb", literal=a\\nb, line=1)
+```
+
+Currently, text fields print raw contents, so actual newlines split a token across
+physical lines. Display escaping will keep records readable without changing
+stored lexemes or literal values or adding source-language escape processing.
+
+### Errors and pending interface changes
+
+An unexpected character such as `#` reports
+`line 1: Unexpected character '#'.`; an unclosed `"hello` reports
+`line 1: Unterminated string.`. The scanner collects errors in source order,
+continues where input remains, and rejects the file with exit 65, diagnostics on
+stderr, and no stdout. Clean file scans exit 0. Numeric-range rejection remains
+pending Step 3; its exact diagnostic will be documented with that implementation.
+
+| Interface or environment | Current behavior | Agreed target |
+| --- | --- | --- |
+| `./run --tokenize tests/lab1/categories.csl` | Prints tokens | Preserve |
+| `./run --repl` | Scans each input line; a bad line does not end the session | Preserve as an alias |
+| `./run` | Prints the Lab 0 greeting | **Step 2:** start the REPL |
+| `./run tests/lab0/hello.src` | Prints `Hello, JM & Dejel!` | Preserve legacy Lab 0 behavior |
+| Rust toolchain | `stable` in `rust-toolchain.toml` | **Step 8:** pin audited version `1.98.0` |
+
+CSL source uses `.csl`; the `.src` Lab 0 fixture remains a compatibility exception.
+The default REPL change will satisfy the PDF's no-argument contract while keeping
+the earlier harness invocation working.
+
+### Intended syntax and deferred semantics
+
+CSL is intended to be dynamically typed. Rust's static types describe the scanner
+implementation, not an implemented CSL type system. For example, `var x = 1;`
+currently produces tokens only; it does not create a variable.
+
+* `{}` will delimit blocks, as in `{ print x; }`.
+* `[]` is reserved for arrays/indexing, as in `items[0]`.
+* `;` will terminate statements, as in `print x;`.
+* `()` will group expressions and calls, as in `(1 + 2)` and `inspect(host)`.
+* Reserved words such as `if`, `else`, `for`, `fun`, `and`, and `var` are already
+  recognized; their execution semantics remain deferred.
+
+Explicit punctuation avoids indentation-sensitive scanning. Whole-name keyword
+lookup keeps identifiers such as `variable` usable. Raw strings and line comments
+keep the initial scanner small enough to explain and test; finite numeric values
+and readable token records are the next agreed refinements.
+
+The Lab 1 scope is the scanner, diagnostics, tests, and documentation. Parsing,
+operator precedence, runtime typing, rule evaluation, and RFID/CAD integration
+remain future work. Recognizing `watch` or `inspect` does not implement monitoring
+or inspection. The full course-template README reorganization is Step 6.
 
 ## File Structure
 
