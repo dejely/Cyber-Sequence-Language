@@ -6,3 +6,7 @@ pub struct Parser {
     binary: Binary
     grouping: Grouping
 }
+
+pub fn parser(&mut self) -> Result<()> {
+
+}
