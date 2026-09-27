@@ -5,7 +5,7 @@ use crate::token::{Literal, Token, TokenType};
 pub struct Scanner {
     source: Vec<char>,
     tokens: Vec<Token>,
-    start: usize, // Start of the current token.
+    start: usize,   // Start of the current token.
     current: usize, // Next character to read.
     line: usize,
 }
@@ -33,7 +33,11 @@ impl Scanner {
     }
 
     fn peek(&self) -> char {
-        if self.is_at_end() { '\0' } else { self.source[self.current] }
+        if self.is_at_end() {
+            '\0'
+        } else {
+            self.source[self.current]
+        }
     }
 
     /// Returns all tokens plus EOF, or all scanning errors.
@@ -50,14 +54,12 @@ impl Scanner {
             return Err(errors.join("\n"));
         }
 
-        self.tokens.push(
-            Token::new(
-                TokenType::Eof,
-                String::new(), // EOF has no source spelling.
-                None,
-                self.line
-            )
-        );
+        self.tokens.push(Token::new(
+            TokenType::Eof,
+            String::new(), // EOF has no source spelling.
+            None,
+            self.line,
+        ));
         Ok(self.tokens)
     }
 
@@ -212,7 +214,9 @@ impl Scanner {
         }
         self.advance(); // Consume the closing quote.
         let lexeme: String = self.source[self.start..self.current].iter().collect();
-        let value: String = self.source[self.start + 1..self.current - 1].iter().collect();
+        let value: String = self.source[self.start + 1..self.current - 1]
+            .iter()
+            .collect();
         self.tokens.push(Token::new(
             TokenType::String,
             lexeme,
@@ -237,18 +241,10 @@ impl Scanner {
     }
 
     fn add_token(&mut self, token_type: TokenType) {
-        let lexeme: String = self.source[self.start..self.current]
-            .iter()
-            .collect();
+        let lexeme: String = self.source[self.start..self.current].iter().collect();
 
-        self.tokens.push(
-            Token::new(
-                token_type,
-                lexeme,
-                None,
-                self.line
-            )
-        );
+        self.tokens
+            .push(Token::new(token_type, lexeme, None, self.line));
     }
 }
 

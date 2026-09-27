@@ -1,11 +1,7 @@
 {
   "private": true,
   "scripts": {
-    "format": "prettier --write \"**/*.rs\"",
-    "format:check": "prettier --check \"**/*.rs\""
-  },
-  "devDependencies": {
-    "prettier": "2.8.8",
-    "prettier-plugin-rust": "0.1.9"
+    "format": "cargo fmt",
+    "format:check": "cargo fmt --check"
   }
 }

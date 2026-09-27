@@ -1,7 +1,6 @@
 {
-  "prettier.prettierPath": "./node_modules/prettier",
   "[rust]": {
-    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.defaultFormatter": "rust-lang.rust-analyzer",
     "editor.formatOnSave": true
   }
 }
