@@ -15,6 +15,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
 
+    if args.get(1).map(String::as_str) == Some("--parse") {
+        repl::run_prompt()?;
+        return Ok(()); // place holder
+    }
+
     // Preserve the Lab 0 greeting.
     if args.get(1).map(String::as_str) != Some("--tokenize") {
         println!("Hello, JM & Dejel!");
