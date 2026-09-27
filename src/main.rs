@@ -9,8 +9,8 @@ use scanner::Scanner;
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = std::env::args().collect();
 
-    // usage: ./run --repl
-    if args.get(1).map(String::as_str) == Some("--repl") {
+    // No arguments starts the prompt; keep --repl as an explicit alias.
+    if args.len() == 1 || args.get(1).map(String::as_str) == Some("--repl") {
         repl::run_prompt()?;
         return Ok(());
     }

@@ -249,13 +249,13 @@ pending Step 3; its exact diagnostic will be documented with that implementation
 | --- | --- | --- |
 | `./run --tokenize tests/lab1/categories.csl` | Prints tokens | Preserve |
 | `./run --repl` | Scans each input line; a bad line does not end the session | Preserve as an alias |
-| `./run` | Prints the Lab 0 greeting | **Step 2:** start the REPL |
+| `./run` | Starts the REPL | Implemented in Step 2 |
 | `./run tests/lab0/hello.src` | Prints `Hello, JM & Dejel!` | Preserve legacy Lab 0 behavior |
 | Rust toolchain | `stable` in `rust-toolchain.toml` | **Step 8:** pin audited version `1.98.0` |
 
 CSL source uses `.csl`; the `.src` Lab 0 fixture remains a compatibility exception.
-The default REPL change will satisfy the PDF's no-argument contract while keeping
-the earlier harness invocation working.
+The default REPL satisfies the PDF's no-argument contract while keeping the
+earlier harness invocation working.
 
 ### Intended syntax and deferred semantics
 
@@ -286,3 +286,14 @@ or inspection. The full course-template README reorganization is Step 6.
 | ---------------- | ------------------------------------------------------------------------- |
 | `src/token.rs`   | Defines `TokenType`, `Literal`, and `Token`                               |
 | `src/scanner.rs` | Reads the raw source code character by character and turns it into tokens |
+
+## Running the scanner REPL
+
+Build with `./build.sh`, then run `./run` (or the equivalent `./run --repl`).
+Each `> ` prompt accepts one line and prints its tokens. For example, enter
+`var x = 1;` to see a declaration token stream; variables are not evaluated.
+Each line is scanned independently, with line numbering starting at 1. A lexical
+error is printed on stderr and the prompt returns, so entering `#` followed by
+`print x;` still scans the second line. End input with EOF (Ctrl-D on Unix-like
+terminals) to exit cleanly. The REPL cannot accumulate multiline strings across
+prompts; use `./run --tokenize <file>` for multiline source files.
