@@ -49,7 +49,7 @@ pub enum TokenType {
     Identifier,
     /// Text enclosed in double quotes, with a corresponding string literal.
     String,
-    /// Reserved for numeric literals; the scanner does not emit this yet.
+    /// An integer or decimal literal, stored as an `f64`.
     Number,
 
     // Keywords.
@@ -106,8 +106,8 @@ pub struct Token {
 
 /// A parsed value, distinct from the original source spelling in a token.
 ///
-/// The scanner currently constructs string and numeric variants. Boolean and
-/// null variants remain available for later parser stages.
+/// The scanner constructs string and numeric variants; the parser constructs
+/// boolean and null values from their keyword tokens.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Literal {
     /// A floating-point number.
@@ -121,6 +121,22 @@ pub enum Literal {
 }
 
 impl Token {
+    pub fn token_type(&self) -> &TokenType {
+        &self.token_type
+    }
+
+    pub fn lexeme(&self) -> &str {
+        &self.lexeme
+    }
+
+    pub fn literal(&self) -> Option<&Literal> {
+        self.literal.as_ref()
+    }
+
+    pub fn line(&self) -> usize {
+        self.line
+    }
+
     /// Constructs a token from values already determined by the scanner.
     ///
     /// This constructor stores its arguments without scanning or validating them.
