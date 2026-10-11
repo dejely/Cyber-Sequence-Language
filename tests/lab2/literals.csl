@@ -1,0 +1,8 @@
+42; // expect: 42.0
+3.14; // expect: 3.14
+"Hello"; // expect: Hello
+true; // expect: true
+false; // expect: false
+nil; // expect: nil
+""; // expect:
+"CMSC 124 is the best" // expect: CMSC 124 is the best

@@ -1,0 +1,1 @@
+this is nonsense // expect error: [line 1] Error at 'this': Expect expression.
