@@ -1,4 +1,4 @@
-# Design and Implementation of Programming Languages(CMSC124): Interpreter
+# Cyber Sequence Language (CSL)
 
 This repository implements a scanner and a recursive descent expression parser.
 The parser builds and prints an abstract syntax tree (AST); it does not evaluate
@@ -106,78 +106,84 @@ harness checks AST output, stderr diagnostics, and exit status. Rust tests also
 check exact diagnostics, suppression of partial output, CLI arguments, and
 REPL continuation. CI runs all three laboratory suites and `cargo test`.
 
-## Lexical Grammar
+- Jemarco Briz ([Jmbriz123](https://github.com/Jmbriz123))
+- Dejel Cyrus De Asis ([dejely](https://github.com/dejely))
 
-### Single-character tokens
+## Overview
 
-| Lexeme | Token Type      | Purpose                                              |
-| ------ | --------------- | ---------------------------------------------------- |
-| `(`    | `LEFT_PAREN`    | Opens a grouped expression                           |
-| `)`    | `RIGHT_PAREN`   | Closes a grouped expression                          |
-| `{`    | `LEFT_BRACE`    | Starts a code block                                  |
-| `}`    | `RIGHT_BRACE`   | Ends a code block                                    |
-| `[`    | `LEFT_BRACKET`  | Opens an array or index expression                   |
-| `]`    | `RIGHT_BRACKET` | Closes an array or index expression                  |
-| `,`    | `COMMA`         | Separates values or arguments                        |
-| `.`    | `DOT`           | Accesses a property or separates a fractional number |
-| `+`    | `PLUS`          | Addition                                             |
-| `-`    | `MINUS`         | Subtraction                                          |
-| `*`    | `STAR`          | Multiplication                                       |
-| `/`    | `SLASH`         | Division                                             |
-| `;`    | `SEMICOLON`     | Terminates a statement                               |
-| `@`    | `AT`            | Introduces a resource reference, such as `@host`     |
+CSL is a proposed dynamically typed language for people describing authorized
+monitoring and response sequences: watch an event source, group or count events
+within a time window, require a capability, then describe an alert or inspection.
+Its intended syntax combines explicit punctuation with domain words such as
+`watch`, `source`, and `sequence`. This CMSC 124 prototype currently implements
+lexical scanning only. Lab 1's deliverable is the scanner, diagnostics, tests,
+and this specification; parsing and evaluation are later milestones. Event
+adapters and optional RFID credential verification remain future extensions,
+not dependencies of the three-month language prototype.
 
-### One- or two-character tokens
+## Host language and build
 
-| Lexeme | Token Type      | Purpose                          |
-| ------ | --------------- | -------------------------------- |
-| `!`    | `BANG`          | Logical negation                 |
-| `!=`   | `BANG_EQUAL`    | Inequality comparison            |
-| `=`    | `EQUAL`         | Assignment                       |
-| `==`   | `EQUAL_EQUAL`   | Equality comparison              |
-| `>`    | `GREATER`       | Greater-than comparison          |
-| `>=`   | `GREATER_EQUAL` | Greater-than-or-equal comparison |
-| `<`    | `LESS`          | Less-than comparison             |
-| `<=`   | `LESS_EQUAL`    | Less-than-or-equal comparison    |
+- Host: Rust, edition 2024, with no runtime crate dependencies.
+- Version metadata: [rust-toolchain.toml](rust-toolchain.toml) currently selects
+  the moving `stable` channel. Rust 1.98.0 was used for local verification;
+  an exact version pin is planned for Step 8 and is not implemented yet.
+- Prerequisites: Rust/Cargo and Bash; Python 3 and curl for the shared test harness.
+- From the repository root, build the release executable:
 
-### Literal tokens
-
-| Lexeme pattern                        | Token Type   | Purpose                                        |
-| ------------------------------------- | ------------ | ---------------------------------------------- |
-| Name such as `total`                  | `IDENTIFIER` | Names a variable, function, class, or property |
-| Text such as `"hello"`                | `STRING`     | Represents text data                           |
-| Numeric value such as `123` or `3.14` | `NUMBER`     | Represents a numeric value                     |
-
-### Identifier Grammar
-
-Identifiers are used to name variables, functions, classes, properties, and other user-defined entities.
-
-**Rules:**
-
-* The first character must be an ASCII uppercase letter, ASCII lowercase letter, or underscore (`_`).
-* Subsequent characters may be ASCII uppercase letters, ASCII lowercase letters, digits (`0-9`), or underscores.
-* Identifiers are case-sensitive.
-* Reserved keywords cannot be used as identifiers.
-
-**Pattern:**
-
-```text
-identifier → [A-Za-z_][A-Za-z0-9_]*
+```bash
+./build.sh
 ```
 
-**Examples:**
+The executable is `target/release/cmsc124-interpreter`, invoked by `./run`.
+Rebuild after source changes; `./run` does not build automatically. On Windows,
+use Git Bash. Node/Prettier configuration is development tooling, not required
+to build or run the interpreter.
 
-| Lexeme       | Single identifier? | Token Type                                              |
-| ------------ | ------ | ------------------------------------------------------- |
-| `total`      | Yes    | `IDENTIFIER`                                            |
-| `user_name`  | Yes    | `IDENTIFIER`                                            |
-| `_count`     | Yes    | `IDENTIFIER`                                            |
-| `event123`   | Yes    | `IDENTIFIER`                                            |
-| `MyVariable` | Yes    | `IDENTIFIER`                                            |
-| `123event`   | No     | `NUMBER(123)` followed by `IDENTIFIER(event)`; no lexical error              |
-| `user-name`  | No     | `IDENTIFIER` followed by `MINUS` and another identifier |
+## Running it
+
+| Command | Current behavior |
+| --- | --- |
+| `./run` | Starts the scanner REPL |
+| `./run --repl` | Explicit alias for the scanner REPL |
+| `./run --tokenize <file>` | Scans a UTF-8 source file and prints tokens |
+| `./run tests/lab0/hello.src` | Prints `Hello, JM & Dejel!` for Lab 0 compatibility |
+| `./run <file>` | Currently prints the legacy greeting; does not execute the file |
+| `./run --parse <file>` | Placeholder: opens the scanner REPL and does not parse the file |
+| `./run --eval <file>` | Not implemented; currently falls through to the legacy greeting |
+
+Example file invocation:
+
+```bash
+./run --tokenize tests/lab1/coverage/categories.csl
+```
+
+The REPL prints `> `, scans one input line, and prints tokens or diagnostics.
+Each line is independent, with line numbering starting at 1; `var x = 1;` does
+not create a variable. A bad line such as `#` reports an error and returns to the
+prompt. End input with EOF (Ctrl-D on Unix-like terminals). Multiline strings
+must be scanned from files because the REPL does not accumulate input lines.
+
+Clean file scans and normal REPL exit use code 0. Lexically rejected files use
+65, with diagnostics on stderr and no stdout. Missing/unreadable input files or
+missing `--tokenize` filenames currently use code 1 through Rust's error return.
+Runtime exit 70 is reserved for later work and is not implemented.
+
+## File extension
+
+CSL source files use `.csl`, matching `tests/lab1/manifest.json`. The `.src`
+extension in `tests/lab0/manifest.json` is a preserved legacy-test exception.
+
+## Lexical structure
+
+Scanning is handwritten, character by character, without regular expressions.
+Patterns below describe the grammar; they are not regex-based implementation.
+All token categories are defined in [src/token.rs](src/token.rs); scanning is in
+[src/scanner.rs](src/scanner.rs).
 
 ### Keywords
+
+The words below are recognized now. Their purposes describe intended semantics;
+none of these keywords currently executes statements or CSL operations.
 
 | Lexeme   | Token Type | Purpose                           |
 | -------- | ---------- | --------------------------------- |
@@ -197,6 +203,49 @@ identifier → [A-Za-z_][A-Za-z0-9_]*
 | `true`   | `TRUE`     | Boolean true value                |
 | `var`    | `VAR`      | Declares a variable               |
 | `while`  | `WHILE`    | Starts a `while` loop             |
+| `watch` | `WATCH` | declares an event-monitoring rule |
+| `ability` | `ABILITY` | declares a named ability |
+| `target` | `TARGET` | specifies the target of an ability |
+| `source` | `SOURCE` | specifies an event or log source |
+| `sequence` | `SEQUENCE` | groups operation steps |
+| `require` | `REQUIRE` | declares a required capability |
+| `capability` | `CAPABILITY` | introduces a capability reference |
+| `count` | `COUNT` | counts matching events |
+| `by` | `BY` | groups events by a field |
+| `within` | `WITHIN` | sets a query time window |
+| `alert` | `ALERT` | raises an alert |
+| `inspect` | `INSPECT` | requests an inspection of an approved target |
+| `isolate` | `ISOLATE` | requests isolation of an approved target |
+| `execute` | `EXECUTE` | requests execution of declared, authorized operations |
+
+### Operators
+
+Arity describes the intended language operation; the scanner only emits tokens.
+Precedence and associativity are deferred until the Lab 2 grammar.
+
+| Operator | Token type | Category | Operands | Associativity | Precedence |
+| --- | --- | --- | --- | --- | --- |
+| `+` | `PLUS` | Arithmetic addition | Binary | Deferred | Deferred |
+| `-` | `MINUS` | Subtraction / negation | Binary / unary | Deferred | Deferred |
+| `*` | `STAR` | Arithmetic multiplication | Binary | Deferred | Deferred |
+| `/` | `SLASH` | Arithmetic division | Binary | Deferred | Deferred |
+| `=` | `EQUAL` | Assignment | Binary | Deferred | Deferred |
+| `==` | `EQUAL_EQUAL` | Equality | Binary | Deferred | Deferred |
+| `!=` | `BANG_EQUAL` | Inequality | Binary | Deferred | Deferred |
+| `<` | `LESS` | Comparison | Binary | Deferred | Deferred |
+| `<=` | `LESS_EQUAL` | Comparison | Binary | Deferred | Deferred |
+| `>` | `GREATER` | Comparison | Binary | Deferred | Deferred |
+| `>=` | `GREATER_EQUAL` | Comparison | Binary | Deferred | Deferred |
+| `!` | `BANG` | Logical negation | Unary | Deferred | Deferred |
+| `and` | `AND` | Logical conjunction | Binary | Deferred | Deferred |
+| `or` | `OR` | Logical disjunction | Binary | Deferred | Deferred |
+
+Longest valid matches win: `!=` emits one `BANG_EQUAL`, and `===` emits
+`EQUAL_EQUAL` followed by `EQUAL`. A single `/` is an operator unless followed
+by another slash beginning a comment.
+
+Punctuation and single-character vocabulary (meanings beyond tokenization are
+reserved for later stages):
 
 ## Cyber Sequence Language (CSL)
 
@@ -280,75 +329,149 @@ are documentation, not regular expressions used by the implementation.
 
 | Area | Rule and concrete example | Implementation status |
 | --- | --- | --- |
-| Identifiers | ASCII `[A-Za-z_][A-Za-z0-9_]*`; `_host2` is one identifier; `Host` and `host` are distinct spellings | Implemented |
-| Keywords | Match the complete name: `if` is `IF`, but `iffy` and `If` are identifiers | Implemented |
-| Numbers | `[0-9]+(\.[0-9]+)?`; `42` and `3.14` produce numeric literals stored as `f64`, with normal floating-point rounding | Implemented |
-| Numeric boundaries | `.5` becomes `DOT NUMBER(5)`; `3.` becomes `NUMBER(3) DOT`; `3.toString` becomes `NUMBER(3) DOT IDENTIFIER(toString)` | Implemented |
-| Signs and adjacent names | `-2` becomes `MINUS NUMBER(2)`; `123event` becomes `NUMBER(123) IDENTIFIER(event)` | Implemented; these are not scanner errors |
-| Numeric range | Require a finite `f64`; a source number consisting of 400 consecutive `9` digits must be rejected | **Pending Step 3:** currently accepted with literal `inf` |
-| Strings | Double quotes delimit text; `"hello"` retains quotes in its lexeme and stores `hello` as its literal; `""` stores an empty string | Implemented |
-| Source escapes | No escape processing: `"a\nb"` stores the four characters `a`, backslash, `n`, `b`; a backslash does not protect a following quote | Implemented |
-| Multiline strings | Actual newlines inside quotes are allowed; the example below starts on line 1 and places `next` on line 2 | Implemented; string token uses its opening line |
-| Comments | `x // note` emits only the identifier before EOF; comments run to newline or EOF; `"//"` is a string | Implemented; block and nested comments are not supported |
-| Whitespace | Space, tab, CR, and LF outside strings emit no tokens; `x` followed by LF then `y` puts `y` on line 2 | Implemented; LF increments the line, CR is ignored, so CRLF counts once |
-| Operators | Prefer the complete operator: `!=` is `BANG_EQUAL`, while `!` is `BANG` | Implemented |
-| Resource references | `@auth_logs` becomes `AT IDENTIFIER(auth_logs)` | Tokenization implemented; resource lookup deferred |
-| EOF | Empty input produces only `EOF` on line 1 | Implemented |
+| Number | `42`, `3.14`; `[0-9]+(\.[0-9]+)?` | `NUMBER` with finite `f64` value |
+| String | `"hello"`, `""`, or quoted multiline text | `STRING` with contents excluding quotes |
+| Boolean | `true`, `false` | Keyword tokens without literal values; future Boolean values |
+| Nil | `nil` | Keyword token without a literal value; future absence of a value |
 
-Multiline source example (the newline inside the string is an actual newline):
+Numbers use floating-point rounding; tiny values may round to zero. Conversion
+failure or overflow to infinity is rejected. A number consisting of 400 `9`
+digits is an example rejection. Exact decimal arithmetic, arbitrary precision,
+and exponent notation are not supported as numeric literal forms.
 
-```text
-"a
-b" next
-```
+The decimal point belongs to a number only if a digit follows it:
 
-The agreed numeric-range restriction supplies the design-specific third rejection
-case requested by the assignment. Choosing finite numbers is our language policy,
-not a PDF requirement. It avoids silently converting an oversized source value
-into infinity. Tiny values may round to zero under `f64` conversion; exact decimal
-arithmetic, exponent syntax, and arbitrary-precision numbers are not supported.
+| Input | Tokens (excluding EOF) |
+| --- | --- |
+| `.5` | `DOT NUMBER(5)` |
+| `3.` | `NUMBER(3) DOT` |
+| `3.toString` | `NUMBER(3) DOT IDENTIFIER(toString)` |
+| `-2` | `MINUS NUMBER(2)` |
+| `123event` | `NUMBER(123) IDENTIFIER(event)`; no lexical error |
 
-### Token values and printed representation
+Strings allow actual newlines and Unicode contents. There is **no source escape
+processing**: `"a\nb"` holds four characters (`a`, backslash, `n`, `b`), and a
+backslash does not protect a following quote. A multiline string's token reports
+its opening line; following tokens reflect newlines consumed within the string.
 
-Current output uses this layout:
+### Identifiers
+
+The pattern is `[A-Za-z_][A-Za-z0-9_]*`: start with an ASCII letter or underscore,
+then use ASCII letters, digits, or underscores. Names are case-sensitive.
+`_host2`, `event123`, and `MyVariable` are identifiers. No explicit length limit
+is imposed, beyond available resources.
+
+The whole name is scanned before keyword lookup: `if` is reserved, while `iffy`
+and `If` are identifiers. `user-name` is two identifiers separated by `MINUS`;
+`123event` is the numeric/name sequence shown above. Neither is one identifier.
+
+### Comments
+
+`//` discards the remainder of a line, including a comment ending at EOF without
+a newline. It may follow code: `x // note` retains only the identifier before
+EOF. Inside strings, `"//"` and `"/* text */"` remain text. Block comments,
+nested comments, and docstring comment syntax are not supported.
+
+Lab 1 uses sidecars, so it does not need inline expectation comments. Its manifest
+omits `comment_prefix`; if later labs use inline mode, their prefix should be `//`.
+
+## Whitespace and termination
+
+Spaces, tabs, CR, and LF outside strings emit no tokens. LF increments the source
+line; CR is ignored, so CRLF counts once. Blank lines still advance positions.
+Whitespace inside a string is retained. Empty input emits only `EOF` on line 1;
+EOF has an empty lexeme and no literal.
+
+The intended statement terminator is `;`, blocks use `{}`, grouping/calls use
+`()`, and `[]` is reserved for arrays/indexing. For example, `{ print x; }` and
+`items[0]` tokenize today but are not parsed. Newlines do not terminate statements
+at the scanner level. `@auth_logs` emits `AT IDENTIFIER(auth_logs)` without doing
+resource lookup.
+
+## Token output format
+
+The format is deterministic and follows source order:
 
 ```text
 Token(type=STRING, lexeme="hello", literal=hello, line=1)
 ```
 
-The lexeme preserves source spelling, while the literal stores the parsed value.
-Nonliteral tokens print `literal=null`; `true`, `false`, and `nil` currently have
-keyword token types and no parsed literal. Line numbers are one-based.
+`type` is the uppercase token category; `lexeme` preserves original spelling;
+`literal` holds a parsed number/string or prints `null` if absent; `line` is
+one-based. Number values use Rust `f64` display, so `3.0` has lexeme `3.0` and
+literal `3`. `true`, `false`, and `nil` currently print `literal=null`.
 
-**Pending Step 4:** escape backslash as `\\`, LF as `\n`, CR as `\r`, and tab as
-`\t` in displayed lexemes and string literal values. Other characters, including
-quotes, retain their existing presentation. For example, the multiline string
-above will print as a single record:
+Backslash, LF, CR, and tab are displayed as `\\`, `\n`, `\r`, and `\t` in
+lexemes and string literals. Other characters, including quotes, remain unchanged.
+This is display escaping only; stored values and source syntax are unchanged.
+An actual newline in `a` followed by `b` prints as:
 
 ```text
 Token(type=STRING, lexeme="a\nb", literal=a\nb, line=1)
 ```
 
-A source string containing a literal backslash followed by `n` will instead print:
+Literal backslash-plus-`n` instead prints as:
 
 ```text
 Token(type=STRING, lexeme="a\\nb", literal=a\\nb, line=1)
 ```
 
-Currently, text fields print raw contents, so actual newlines split a token across
-physical lines. Display escaping will keep records readable without changing
-stored lexemes or literal values or adding source-language escape processing.
+Every successful scan ends with exactly one `EOF`. Files ending with LF place
+EOF on the next line; a final newline is therefore significant to token positions.
+This output contract is frozen for Lab 1; format changes are recorded below.
 
-### Errors and pending interface changes
+## Grammar
 
-An unexpected character such as `#` reports
-`line 1: Unexpected character '#'.`; an unclosed `"hello` reports
-`line 1: Unterminated string.`. The scanner collects errors in source order,
-continues where input remains, and rejects the file with exit 65, diagnostics on
-stderr, and no stdout. Clean file scans exit 0. Numeric-range rejection remains
-pending Step 3; its exact diagnostic will be documented with that implementation.
+Deferred to Lab 2. No integrated parser or complete context-free grammar exists.
+The preliminary `src/parser.rs` is not declared as a module by `src/main.rs`.
+Lexical patterns above are implemented; expression precedence and statement
+syntax validation are not. Recognizing a keyword does not validate its use.
 
-| Interface or environment | Current behavior | Agreed target |
+## Parse output format
+
+Deferred to Lab 2. There is no tree-output contract yet; `--parse` currently
+opens the scanner REPL as a placeholder.
+
+## Semantics
+
+### Values and types
+
+CSL is intended to be dynamically typed. Rust's static types describe the host
+implementation, not a CSL runtime. Scanner numbers are `f64` and string literals
+are Rust strings; runtime values and type rules are deferred to Lab 3.
+
+### Value printing
+
+Runtime value printing is deferred to Lab 3. Token display is defined above and
+must not be confused with evaluating `print`.
+
+### Truthiness
+
+Deferred to Lab 3; no condition evaluation is implemented.
+
+### Operator semantics
+
+Deferred to Lab 3, including operand compatibility, string addition, mixed types,
+equality rules, and division by zero. Operators currently produce tokens only.
+
+### Scope and bindings
+
+Deferred to Lab 4, including declaration, shadowing, uninitialized bindings, and
+undefined-name handling. `var x = 1;` does not create a stored variable today.
+
+### Control flow and functions
+
+Deferred to Lab 5, including logical return values, dangling-else behavior,
+closures, return defaults, and arity errors.
+
+## Native functions
+
+Deferred to Lab 5. No native functions are callable. `inspect`, `isolate`, and
+`execute` are reserved tokens, not operational APIs.
+
+## Errors and diagnostics
+
+| Condition | Diagnostic example | File exit code |
 | --- | --- | --- |
 | `./run --tokenize tests/lab1/categories.csl` | Prints tokens | Preserve |
 | `./run --repl` | Parses one expression per line; a bad line does not end the session | Implemented |

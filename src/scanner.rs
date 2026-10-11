@@ -118,7 +118,7 @@ impl Scanner {
             ' ' | '\r' | '\t' => {}
             '\n' => self.line += 1,
             '"' => self.string()?,
-            '0'..='9' => self.number(),
+            '0'..='9' => self.number()?,
             'a'..='z' | 'A'..='Z' | '_' => self.identifier(),
             _ => return Err(format!("line {}: Unexpected character {:?}.", self.line, c)),
         }
@@ -167,7 +167,7 @@ impl Scanner {
         self.add_token(token_type);
     }
 
-    fn number(&mut self) {
+    fn number(&mut self) -> Result<(), String> {
         while self.peek().is_ascii_digit() {
             self.advance();
         }
@@ -184,13 +184,19 @@ impl Scanner {
         }
 
         let lexeme: String = self.source[self.start..self.current].iter().collect();
-        let value = lexeme.parse::<f64>().expect("scanner produced a valid number");
+        // Consume the full lexeme before rejecting it so scanning can resume afterward.
+        let value = lexeme
+            .parse::<f64>()
+            .ok()
+            .filter(|value| value.is_finite())
+            .ok_or_else(|| format!("line {}: Numeric literal out of range.", self.line))?;
         self.tokens.push(Token::new(
             TokenType::Number,
             lexeme,
             Some(Literal::Number(value)),
             self.line,
         ));
+        Ok(())
     }
 
     fn string(&mut self) -> Result<(), String> {
@@ -261,5 +267,52 @@ mod tests {
         );
         assert_eq!(error.matches('\n').count(), 1);
         assert!(!error.ends_with('\n'));
+    }
+}
+
+#[cfg(test)]
+mod numeric_tests {
+    use super::Scanner;
+    use crate::token::{Literal, Token, TokenType};
+
+    #[test]
+    fn accepts_finite_numbers_including_maximum_and_underflow_to_zero() {
+        let maximum = format!("{:.0}", f64::MAX);
+        let tiny = format!("0.{}1", "0".repeat(400));
+        for (source, value) in [
+            ("42".to_string(), 42.0),
+            ("12.5".to_string(), 12.5),
+            (maximum, f64::MAX),
+            (tiny, 0.0),
+        ] {
+            let tokens = Scanner::new(source.clone()).scan_tokens().unwrap();
+            assert_eq!(
+                tokens,
+                vec![
+                    Token::new(TokenType::Number, source, Some(Literal::Number(value)), 1),
+                    Token::new(TokenType::Eof, String::new(), None, 1),
+                ]
+            );
+        }
+    }
+
+    #[test]
+    fn rejects_integer_and_decimal_overflow_at_eof() {
+        let integer = "9".repeat(400);
+        for source in [integer.clone(), format!("{integer}.25")] {
+            assert_eq!(
+                Scanner::new(source).scan_tokens().unwrap_err(),
+                "line 1: Numeric literal out of range."
+            );
+        }
+    }
+
+    #[test]
+    fn consumes_overflow_before_reporting_later_errors() {
+        let source = format!("var ok = 1;\n{}.25#\n?", "9".repeat(400));
+        assert_eq!(
+            Scanner::new(source).scan_tokens().unwrap_err(),
+            "line 2: Numeric literal out of range.\nline 2: Unexpected character '#'.\nline 3: Unexpected character '?'."
+        );
     }
 }

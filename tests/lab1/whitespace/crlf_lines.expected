@@ -1,0 +1,7 @@
+Token(type=VAR, lexeme=var, literal=null, line=1)
+Token(type=IDENTIFIER, lexeme=x, literal=null, line=1)
+Token(type=SEMICOLON, lexeme=;, literal=null, line=1)
+Token(type=PRINT, lexeme=print, literal=null, line=3)
+Token(type=IDENTIFIER, lexeme=x, literal=null, line=3)
+Token(type=SEMICOLON, lexeme=;, literal=null, line=3)
+Token(type=EOF, lexeme=, literal=null, line=4)
