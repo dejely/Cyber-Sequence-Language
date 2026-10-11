@@ -1,7 +1,9 @@
 # CMSC 124 Progress Tracker
 
-**Last repository verification:** 2026-09-20  
-**Current milestone:** Lab 1 — scanner and tokenizer  
+**Last repository verification:** 2026-10-11
+
+**Current milestone:** Lab 2 — expression parser and AST printer
+
 **Course reference:** [Lab 1 implementation notes](https://renscourses.netlify.app/articles/cmsc-124-lab1#implementation-notes)
 
 This tracker records what the repository implements today. A checked item has
@@ -16,12 +18,12 @@ before marking implementation work complete.
 ### Build and command interface
 
 - [x] Build the release executable with `./build.sh`.
-- [x] Preserve the Lab 0 greeting when no tokenizer command is supplied.
+- [x] Preserve the Lab 0 greeting for legacy positional `.src` file invocations.
 - [x] Tokenize a source file with `./run --tokenize <file>`.
 - [x] Print tokens in the fixture format: type, lexeme, literal, and line.
 - [x] End a successful scan with exactly one `EOF` token.
 - [x] Return exit code `65` for static scanning errors.
-- [x] Provide `./run --repl` for tokenizing one input line at a time.
+- [x] Provide `./run --repl` (now upgraded to parse one expression per line).
 
 ### Lexical categories
 
@@ -62,22 +64,49 @@ before marking implementation work complete.
 
 ### Deferred interpreter work
 
-- [ ] Parse expressions, declarations, blocks, and statements.
-- [ ] Build an abstract syntax tree.
+- [x] Parse expressions with precedence, unary operators, and grouping.
+- [x] Build an expression abstract syntax tree.
+- [ ] Parse declarations, blocks, and statements.
 - [ ] Resolve names and scopes.
 - [ ] Evaluate expressions and execute statements.
 - [ ] Define runtime errors and their exit behavior.
 
-### Verification recorded on 2026-09-20
+### Verification recorded on 2026-10-11
 
 - [x] `./build.sh`
 - [x] `python3 run_tests.py tests/lab0` — 1/1 passed.
-- [x] `python3 run_tests.py tests/lab1` — 8/8 passed.
-- [x] `cargo test` — 1/1 passed.
+- [x] `python3 run_tests.py tests/lab1` — 20/20 passed.
+- [x] `python3 run_tests.py tests/lab2` — 19/19 passed.
+- [x] `cargo test` — 14 unit tests and 15 CLI integration tests passed.
 
-The Rust build reports existing dead-code warnings for `Literal::Boolean` and
-`Literal::Null`. They do not fail the Lab 1 fixtures, but they should be
-reviewed when later parser or evaluator work needs those literal values.
+The parser now constructs `Literal::Boolean` and `Literal::Null`; their previous
+dead-code warnings are resolved. The release build completed without warnings.
+
+## Lab 2 — Expression Parser
+
+**Course reference:** [Lab 2 brief and scope](labs/lab2.md)
+
+### Week 2
+
+- [x] Define literal, unary, binary, and grouping AST nodes.
+- [x] Add token accessors and parser helpers for matching, consuming, and EOF.
+- [x] Complete equality, comparison, term, factor, unary, and primary rules.
+- [x] Preserve left associativity for binary operators.
+- [x] Parse numeric, string, boolean, and nil literals and parentheses.
+- [x] Print ASTs in the laboratory's parenthesized format.
+- [x] Parse files with `./run --parse <file>` and positional `.csl` files.
+- [x] Use the parser in the default REPL, `--repl`, and `--parse` without a file.
+- [x] Add Lab 2 fixtures for precedence, associativity, literals, and grouping.
+
+### Week 3
+
+- [x] Recover at semicolons and collect file parsing errors in source order.
+- [x] Send file diagnostics to stderr and return exit 65 for static errors.
+- [x] Keep stdout empty for failed files, including valid expressions before errors.
+- [x] Continue the REPL after scanning or parsing errors.
+- [x] Reject trailing input and empty expressions.
+- [x] Verify Labs 0, 1, and 2 and add Lab 2 plus Rust tests to CI.
+- [x] Document the implemented grammar, file separators, AST formatting, and quirks.
 
 ## Future Laboratories
 
@@ -85,7 +114,7 @@ Add each laboratory below as soon as its README or PDF is available. Keep the
 course material in the repository, preferably under `docs/labs/`, and use a
 relative link so the tracker remains useful after cloning the project.
 
-### Lab 2 and later
+### Lab 3 and later
 
 - [ ] Add the laboratory README or PDF under `docs/labs/`.
 - [ ] Link the exact brief here and record its submission requirements.

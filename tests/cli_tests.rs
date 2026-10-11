@@ -19,23 +19,21 @@ fn run_with_input(args: &[&str], input: &str) -> Output {
 
 #[test]
 fn default_repl_recovers_after_an_invalid_line() {
-    let result = run_with_input(&[], "var first;\n#\nprint first;\n");
+    let result = run_with_input(&[], "var first;\n#\nprint first;\n42\n");
     assert_eq!(result.status.code(), Some(0));
     assert_eq!(
         String::from_utf8(result.stdout).unwrap(),
-        concat!(
-            "> Token(type=VAR, lexeme=var, literal=null, line=1)\n",
-            "Token(type=IDENTIFIER, lexeme=first, literal=null, line=1)\n",
-            "Token(type=SEMICOLON, lexeme=;, literal=null, line=1)\n",
-            "Token(type=EOF, lexeme=, literal=null, line=2)\n",
-            "> > Token(type=PRINT, lexeme=print, literal=null, line=1)\n",
-            "Token(type=IDENTIFIER, lexeme=first, literal=null, line=1)\n",
-            "Token(type=SEMICOLON, lexeme=;, literal=null, line=1)\n",
-            "Token(type=EOF, lexeme=, literal=null, line=2)\n",
-            "> "
-        )
+        "> > > > 42.0\n> "
     );
-    assert_eq!(result.stderr, b"line 1: Unexpected character '#'.\n");
+    assert_eq!(
+        result.stderr,
+        concat!(
+            "[line 1] Error at 'var': Expect expression.\n",
+            "line 1: Unexpected character '#'.\n",
+            "[line 1] Error at 'print': Expect expression.\n"
+        )
+        .as_bytes()
+    );
 }
 
 #[test]
@@ -54,15 +52,7 @@ fn explicit_repl_alias_matches_default_including_final_line_without_newline() {
     assert_eq!(alias.status.code(), Some(0));
     assert_eq!(default.stdout, alias.stdout);
     assert_eq!(default.stderr, alias.stderr);
-    assert_eq!(
-        default.stdout,
-        concat!(
-            "> > Token(type=NUMBER, lexeme=42, literal=42, line=1)\n",
-            "Token(type=EOF, lexeme=, literal=null, line=1)\n",
-            "> "
-        )
-        .as_bytes()
-    );
+    assert_eq!(default.stdout, b"> > 42.0\n> ");
     assert_eq!(default.stderr, b"line 1: Unexpected character '#'.\n");
 }
 

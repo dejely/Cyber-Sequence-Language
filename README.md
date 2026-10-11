@@ -1,6 +1,110 @@
 # Cyber Sequence Language (CSL)
 
-## Creators
+This repository implements a scanner and a recursive descent expression parser.
+The parser builds and prints an abstract syntax tree (AST); it does not evaluate
+expressions. Token purposes below describe intended language semantics.
+Declarations, statements, and CSL operations are not parsed or executed yet.
+
+## Running the interpreter
+
+Build with `./build.sh`, then use `./run`, `./run --repl`, or `./run --parse`
+to start the expression REPL. Enter one expression per line; the REPL prints its
+AST and continues after scanning or parsing errors. Ctrl-D ends the session on
+Unix. Each entered line starts at source line 1, and the `> ` prompt is printed
+before each read, including the final read that reaches EOF.
+
+Use `./run --parse <file>` to parse a file, or pass a `.csl` filename directly.
+The original `./run tests/lab0/hello.src` invocation still prints the Lab 0
+greeting. Positional `.src` files use that compatibility behavior; an explicit
+`--parse` parses files regardless of their extension. Use
+`./run --tokenize <file>` for the unchanged Lab 1 token output.
+
+For example, `./run --parse tests/lab2/precedence.csl` prints:
+
+```text
+(- (+ 1.0 (* 2.0 3.0)) 4.0)
+```
+
+Successful files exit 0. Scanning or parsing errors go to stderr and exit 65,
+with no ASTs or tokens printed to stdout. Argument and file-access errors exit 1.
+The REPL reports errors on stderr and stays open; reaching EOF exits 0 even if
+an earlier entry failed.
+
+## Grammar
+
+The implemented expression grammar follows the
+[Lab 2 brief](docs/labs/lab2.md). Precedence increases from equality through
+primary expressions:
+
+```text
+expression → equality
+equality   → comparison ( ( "!=" | "==" ) comparison )*
+comparison → term ( ( ">" | ">=" | "<" | "<=" ) term )*
+term       → factor ( ( "-" | "+" ) factor )*
+factor     → unary ( ( "/" | "*" ) unary )*
+unary      → ( "!" | "-" ) unary | primary
+primary    → NUMBER | STRING | "true" | "false" | "nil" | "(" expression ")"
+
+file       → expression ( ";" expression )* ";"? EOF
+repl       → expression ";"? EOF
+```
+
+Binary operators associate to the left: `10 - 3 - 2` prints
+`(- (- 10.0 3.0) 2.0)`. Unary operators nest to the right: `--10` prints
+`(- (- 10.0))`. Parentheses produce an explicit `group` node, so
+`(1 + 2) * 3` prints `(* (group (+ 1.0 2.0)) 3.0)`. Ordinary integral numbers
+print with `.0`, strings print their contents without quotes, booleans print `true` or
+`false`, and `nil` prints `nil`. These are tree representations, not results:
+even `1 / 0` is a valid expression to parse.
+
+Files may contain several expressions separated by semicolons, with an optional
+final semicolon. Newlines remain whitespace, so a file expression may span
+lines. The REPL accepts one complete expression per entry, also with an optional
+final semicolon; it does not collect multiline expressions. Neither interface
+silently accepts trailing tokens. Empty or comment-only input is an error, as
+in the laboratory examples, and repeated semicolons create empty expressions
+that are also rejected.
+
+After a file parsing error, the parser skips through the next semicolon and
+tries the following expression. It collects diagnostics in source order and
+rejects the whole file if any expression failed. Without a semicolon, recovery
+reaches EOF. For example, `1 + ;` on line 1 followed by `2 * ;` on line 2
+reports both errors:
+
+```text
+[line 1] Error at ';': Expect expression.
+[line 2] Error at ';': Expect expression.
+```
+
+Identifiers, assignment, unary `+`, `and`/`or`, calls, arrays, declarations,
+and CSL rules remain outside this expression grammar even when their tokens
+are recognized. Chained comparisons are parsed left to right; no evaluation or
+type checking is performed. The scanner's existing numeric and raw-string
+rules still apply: exponent syntax is unsupported, oversized numbers are
+rejected, and large or small values may print in scientific notation. AST string
+output preserves embedded newlines and backslashes without display escaping;
+token output escapes control characters and backslashes. A lexical error rejects scanning before
+the parser runs.
+
+## Tests
+
+Run the three laboratory suites after building:
+
+```sh
+./build.sh
+python3 run_tests.py tests/lab0
+python3 run_tests.py tests/lab1
+python3 run_tests.py tests/lab2
+cargo test
+```
+
+The course harness is downloaded by CI from
+[`cmsc-124-harness/v1.1`](https://github.com/WhiteLicorice/cmsc-124-harness/blob/v1.1/run_tests.py)
+and is ignored locally. Lab 0 and Lab 1 retain their sidecar expectations.
+Lab 2 uses inline `// expect:` and `// expect error:` annotations so the
+harness checks AST output, stderr diagnostics, and exit status. Rust tests also
+check exact diagnostics, suppression of partial output, CLI arguments, and
+REPL continuation. CI runs all three laboratory suites and `cargo test`.
 
 - Jemarco Briz ([Jmbriz123](https://github.com/Jmbriz123))
 - Dejel Cyrus De Asis ([dejely](https://github.com/dejely))
@@ -12,8 +116,9 @@ monitoring and response sequences: watch an event source, group or count events
 within a time window, require a capability, then describe an alert or inspection.
 Its intended syntax combines explicit punctuation with domain words such as
 `watch`, `source`, and `sequence`. This CMSC 124 prototype currently implements
-lexical scanning only. Lab 1's deliverable is the scanner, diagnostics, tests,
-and this specification; parsing and evaluation are later milestones. Event
+lexical scanning and expression parsing. Lab 1 covers the scanner, diagnostics,
+tests, and lexical specification; Lab 2 adds expression ASTs and printing.
+Evaluation remains a later milestone. Event
 adapters and optional RFID credential verification remain future extensions,
 not dependencies of the three-month language prototype.
 
@@ -39,13 +144,13 @@ to build or run the interpreter.
 
 | Command | Current behavior |
 | --- | --- |
-| `./run` | Starts the scanner REPL |
-| `./run --repl` | Explicit alias for the scanner REPL |
+| `./run` | Starts the expression REPL |
+| `./run --repl` | Explicit alias for the expression REPL |
 | `./run --tokenize <file>` | Scans a UTF-8 source file and prints tokens |
 | `./run tests/lab0/hello.src` | Prints `Hello, JM & Dejel!` for Lab 0 compatibility |
-| `./run <file>` | Currently prints the legacy greeting; does not execute the file |
-| `./run --parse <file>` | Placeholder: opens the scanner REPL and does not parse the file |
-| `./run --eval <file>` | Not implemented; currently falls through to the legacy greeting |
+| `./run <file>` | Parses expressions; positional `.src` files retain the Lab 0 greeting |
+| `./run --parse <file>` | Scans the file, parses expressions, and prints ASTs |
+| `./run --eval <file>` | Not implemented; reports a usage error with exit 1 |
 
 Example file invocation:
 
@@ -53,15 +158,15 @@ Example file invocation:
 ./run --tokenize tests/lab1/coverage/categories.csl
 ```
 
-The REPL prints `> `, scans one input line, and prints tokens or diagnostics.
-Each line is independent, with line numbering starting at 1; `var x = 1;` does
-not create a variable. A bad line such as `#` reports an error and returns to the
+The REPL prints `> `, scans and parses one input line, and prints an AST or diagnostics.
+Each line is independent, with line numbering starting at 1; `var x = 1;` is
+rejected by the expression grammar. A bad line such as `#` reports an error and returns to the
 prompt. End input with EOF (Ctrl-D on Unix-like terminals). Multiline strings
 must be scanned from files because the REPL does not accumulate input lines.
 
-Clean file scans and normal REPL exit use code 0. Lexically rejected files use
-65, with diagnostics on stderr and no stdout. Missing/unreadable input files or
-missing `--tokenize` filenames currently use code 1 through Rust's error return.
+Clean file scans or parses and normal REPL exit use code 0. Lexically or
+syntactically rejected files use 65, with diagnostics on stderr and no stdout.
+Missing/unreadable input files or invalid arguments use code 1 through Rust's error return.
 Runtime exit 70 is reserved for later work and is not implemented.
 
 ## File extension
@@ -116,23 +221,25 @@ none of these keywords currently executes statements or CSL operations.
 
 ### Operators
 
-Arity describes the intended language operation; the scanner only emits tokens.
-Precedence and associativity are deferred until the Lab 2 grammar.
+The scanner emits operator tokens; the parser applies the precedence and
+associativity below. Levels increase from equality (1) to unary (5); literals
+and grouping are primary expressions. Assignment and logical conjunction or
+disjunction are recognized only by the scanner.
 
 | Operator | Token type | Category | Operands | Associativity | Precedence |
 | --- | --- | --- | --- | --- | --- |
-| `+` | `PLUS` | Arithmetic addition | Binary | Deferred | Deferred |
-| `-` | `MINUS` | Subtraction / negation | Binary / unary | Deferred | Deferred |
-| `*` | `STAR` | Arithmetic multiplication | Binary | Deferred | Deferred |
-| `/` | `SLASH` | Arithmetic division | Binary | Deferred | Deferred |
+| `+` | `PLUS` | Arithmetic addition | Binary | Left | 3 |
+| `-` | `MINUS` | Subtraction / negation | Binary / unary | Left / right | 3 / 5 |
+| `*` | `STAR` | Arithmetic multiplication | Binary | Left | 4 |
+| `/` | `SLASH` | Arithmetic division | Binary | Left | 4 |
 | `=` | `EQUAL` | Assignment | Binary | Deferred | Deferred |
-| `==` | `EQUAL_EQUAL` | Equality | Binary | Deferred | Deferred |
-| `!=` | `BANG_EQUAL` | Inequality | Binary | Deferred | Deferred |
-| `<` | `LESS` | Comparison | Binary | Deferred | Deferred |
-| `<=` | `LESS_EQUAL` | Comparison | Binary | Deferred | Deferred |
-| `>` | `GREATER` | Comparison | Binary | Deferred | Deferred |
-| `>=` | `GREATER_EQUAL` | Comparison | Binary | Deferred | Deferred |
-| `!` | `BANG` | Logical negation | Unary | Deferred | Deferred |
+| `==` | `EQUAL_EQUAL` | Equality | Binary | Left | 1 |
+| `!=` | `BANG_EQUAL` | Inequality | Binary | Left | 1 |
+| `<` | `LESS` | Comparison | Binary | Left | 2 |
+| `<=` | `LESS_EQUAL` | Comparison | Binary | Left | 2 |
+| `>` | `GREATER` | Comparison | Binary | Left | 2 |
+| `>=` | `GREATER_EQUAL` | Comparison | Binary | Left | 2 |
+| `!` | `BANG` | Logical negation | Unary | Right | 5 |
 | `and` | `AND` | Logical conjunction | Binary | Deferred | Deferred |
 | `or` | `OR` | Logical disjunction | Binary | Deferred | Deferred |
 
@@ -143,31 +250,92 @@ by another slash beginning a comment.
 Punctuation and single-character vocabulary (meanings beyond tokenization are
 reserved for later stages):
 
-| Lexeme | Token Type      | Purpose                                              |
-| ------ | --------------- | ---------------------------------------------------- |
-| `(`    | `LEFT_PAREN`    | Opens a grouped expression                           |
-| `)`    | `RIGHT_PAREN`   | Closes a grouped expression                          |
-| `{`    | `LEFT_BRACE`    | Starts a code block                                  |
-| `}`    | `RIGHT_BRACE`   | Ends a code block                                    |
-| `[`    | `LEFT_BRACKET`  | Opens an array or index expression                   |
-| `]`    | `RIGHT_BRACKET` | Closes an array or index expression                  |
-| `,`    | `COMMA`         | Separates values or arguments                        |
-| `.`    | `DOT`           | Accesses a property or separates a fractional number |
-| `+`    | `PLUS`          | Addition                                             |
-| `-`    | `MINUS`         | Subtraction                                          |
-| `*`    | `STAR`          | Multiplication                                       |
-| `/`    | `SLASH`         | Division                                             |
-| `;`    | `SEMICOLON`     | Terminates a statement                               |
-| `@`    | `AT`            | Introduces a resource reference, such as `@host`     |
+## Cyber Sequence Language (CSL)
 
-### Literals
+Cyber Sequence Language (CSL) is the proposed domain language for describing
+authorized monitoring and response sequences. A CSL rule can identify an event
+source, group or count matching events in a time window, state the capability
+it needs, and describe the sequence that should produce an alert or an
+inspection result. The interpreter currently tokenizes CSL source and parses
+the expression grammar above; CSL rule parsing, validation, and execution
+are still planned work.
 
-| Kind | Syntax | Current token value / intended meaning |
+CSL also has an optional hardware-verification component. An RFID reader can
+act as a credential access device (CAD): before a protected rule or response is
+accepted, it reads an enrolled RFID credential and passes its verification
+result to CSL. This is intended only for authorized users, enrolled credentials,
+and approved systems. The language should receive a simple verification result,
+such as an authorized credential identity or a rejection, rather than expose
+raw RFID access to every rule.
+
+### Planned CSL features
+
+* Event and log-source monitoring with `watch` and `source`.
+* Rule inputs that identify a `target`, a `require`d capability, and an
+  `ability` or `sequence` to run.
+* Event aggregation with `count`, `by`, and `within`.
+* Alerting and controlled response intents with `alert`, `inspect`, `isolate`,
+  and `execute`.
+* Optional RFID/CAD authorization verification before protected operations.
+
+### CSL keyword trackerz  
+
+The checked items are recognized by the current scanner. They still need parser
+rules and runtime behavior before they become usable CSL statements.
+
+- [x] `watch` (`WATCH`) — declares an event-monitoring rule.
+- [x] `ability` (`ABILITY`) — declares a named ability.
+- [x] `target` (`TARGET`) — specifies the target of an ability.
+- [x] `source` (`SOURCE`) — specifies an event or log source.
+- [x] `sequence` (`SEQUENCE`) — groups operation steps.
+- [x] `require` (`REQUIRE`) — declares a required capability.
+- [x] `capability` (`CAPABILITY`) — introduces a capability reference.
+- [x] `count` (`COUNT`) — counts matching events.
+- [x] `by` (`BY`) — groups events by a field.
+- [x] `within` (`WITHIN`) — sets a query time window.
+- [x] `alert` (`ALERT`) — raises an alert.
+- [x] `inspect` (`INSPECT`) — requests an inspection of an approved target.
+- [x] `isolate` (`ISOLATE`) — requests isolation of an approved target.
+- [x] `execute` (`EXECUTE`) — requests execution of declared, authorized operations.
+
+### CSL implementation checklist
+
+- [x] Add CSL keyword token types and scanner recognition.
+- [x] Add the `@` token for resource references such as `@auth_logs`.
+- [ ] Define the CSL grammar and abstract syntax tree for rules, sources,
+  capabilities, and sequences.
+- [ ] Parse CSL statements and report source locations for invalid syntax.
+- [ ] Validate targets, required capabilities, and allowed operations before
+  evaluation.
+- [ ] Implement event-source adapters and deterministic `count`, `by`, and
+  `within` evaluation.
+- [ ] Implement alerts and simulated `inspect`, `isolate`, and `execute`
+  results for development and testing.
+- [ ] Define an RFID/CAD adapter that provides only an authorization result to
+  the runtime, with enrolled-credential and audit requirements.
+- [ ] Add unit and integration tests for CSL tokenization, parsing,
+  authorization, and rejected operations.
+
+### End-of-input token
+
+| Lexeme        | Token Type | Purpose                           |
+| ------------- | ---------- | --------------------------------- |
+| End of source | `EOF`      | Marks the end of the token stream |
+
+## Language Design Decisions
+
+### Agreed lexical rules
+
+These rules describe the scanner unless a row is explicitly marked pending.
+Token sequences below omit the final `EOF` for brevity. The grammar patterns
+are documentation, not regular expressions used by the implementation.
+
+| Area | Rule and concrete example | Implementation status |
 | --- | --- | --- |
 | Number | `42`, `3.14`; `[0-9]+(\.[0-9]+)?` | `NUMBER` with finite `f64` value |
 | String | `"hello"`, `""`, or quoted multiline text | `STRING` with contents excluding quotes |
-| Boolean | `true`, `false` | Keyword tokens without literal values; future Boolean values |
-| Nil | `nil` | Keyword token without a literal value; future absence of a value |
+| Boolean | `true`, `false` | Keyword tokens; the parser creates Boolean AST literals |
+| Nil | `nil` | Keyword token; the parser creates a null AST literal |
 
 Numbers use floating-point rounding; tiny values may round to zero. Conversion
 failure or overflow to infinity is rejected. A number consisting of 400 `9`
@@ -255,17 +423,17 @@ Every successful scan ends with exactly one `EOF`. Files ending with LF place
 EOF on the next line; a final newline is therefore significant to token positions.
 This output contract is frozen for Lab 1; format changes are recorded below.
 
-## Grammar
+## Parser implementation
 
-Deferred to Lab 2. No integrated parser or complete context-free grammar exists.
-The preliminary `src/parser.rs` is not declared as a module by `src/main.rs`.
-Lexical patterns above are implemented; expression precedence and statement
-syntax validation are not. Recognizing a keyword does not validate its use.
+The [expression grammar](#grammar) is implemented in `src/parser.rs` and
+integrated through `src/main.rs`. It validates expression syntax and builds
+the AST nodes in `src/expr.rs`. Statement and CSL rule grammars remain deferred.
 
 ## Parse output format
 
-Deferred to Lab 2. There is no tree-output contract yet; `--parse` currently
-opens the scanner REPL as a placeholder.
+The AST printer uses parenthesized prefix notation, as documented in the
+[expression grammar](#grammar). Files print one AST per expression after the
+whole file parses successfully; the REPL prints one AST per successful entry.
 
 ## Semantics
 
@@ -308,134 +476,52 @@ Deferred to Lab 5. No native functions are callable. `inspect`, `isolate`, and
 
 | Condition | Diagnostic example | File exit code |
 | --- | --- | --- |
-| Unexpected character `#` | `line 1: Unexpected character '#'.` | 65 |
-| Unclosed string | `line 1: Unterminated string.` | 65 |
-| Numeric conversion failure or nonfinite result | `line 1: Numeric literal out of range.` | 65 |
+| `./run --tokenize tests/lab1/coverage/categories.csl` | Prints tokens | Preserve |
+| `./run --repl` | Parses one expression per line; a bad line does not end the session | Implemented |
+| `./run` | Starts the expression REPL | Implemented |
+| `./run tests/lab0/hello.src` | Prints `Hello, JM & Dejel!` | Preserve legacy Lab 0 behavior |
+| Rust toolchain | `stable` in `rust-toolchain.toml` | **Step 8:** pin audited version `1.98.0` |
 
-Errors include the actual source line; unclosed multiline strings use their
-opening line. After a bad character or number, scanning continues to collect
-later errors. An unclosed string consumes through EOF. Diagnostics appear in
-source order on stderr. If any lexical error occurs, the entire file's stdout
-is empty, even if valid tokens precede the error. Clean scans exit 0.
+CSL source uses `.csl`; the `.src` Lab 0 fixture remains a compatibility exception.
+The default REPL satisfies the no-argument interface while keeping the
+earlier Lab 0 harness invocation working.
 
-The REPL prints lexical diagnostics and continues; normal EOF exits 0 despite
-previous bad lines. Missing filename/file-read errors exit 1 with Rust error text
-on stderr; that text is platform-dependent. Unknown options currently produce
-the legacy greeting rather than usage errors. Exit 70 is a future runtime code.
+### Intended syntax and deferred semantics
 
-## Testing conventions
+CSL is intended to be dynamically typed. Rust's static types describe the scanner
+and parser implementation, not an implemented CSL type system. For example,
+`var x = 1;` produces tokens with `--tokenize`, but the expression parser
+rejects it; it does not create a variable.
 
-| Location | Activity | Extension / mode | Flag |
-| --- | --- | --- | --- |
-| `tests/lab0` | Legacy greeting | `.src` / sidecar | None |
-| `tests/lab1` | Scanner | `.csl` / sidecar | `--tokenize` |
-| `tests/cli_tests.rs` | CLI contracts | Rust integration tests | Via Cargo |
+* `{}` will delimit blocks, as in `{ print x; }`.
+* `[]` is reserved for arrays/indexing, as in `items[0]`.
+* `;` will terminate statements, as in `print x;`.
+* `()` groups expressions such as `(1 + 2)`; calls such as `inspect(host)`
+  remain planned.
+* Reserved words such as `if`, `else`, `for`, `fun`, `and`, and `var` are already
+  recognized; their execution semantics remain deferred.
 
-Lab 1 contains category folders for comments, coverage, errors, identifiers,
-keywords, numbers, operators, strings, and whitespace. Empty-input fixtures and
-one shared manifest stay at its root. Discovery is recursive; each `.csl` stays
-beside its `.expected` and, for rejection, `.exit` containing `65`. See the
-[fixture coverage guide](tests/lab1/README.md) for each case's purpose. Preserve
-intentional CRLF bytes in the whitespace and control-character fixtures.
+Explicit punctuation avoids indentation-sensitive scanning. Whole-name keyword
+lookup keeps identifiers such as `variable` usable. Raw strings and line comments
+keep the scanner small enough to explain and test. Finite numeric values
+and escaped token records are now implemented.
 
-The harness compares stdout and exit codes, not stderr. Rust CLI tests assert
-exact diagnostics, REPL recovery, stream separation, and repeated-run output;
-unit tests also check numeric limits and unchanged stored values after display.
-Expectations must be reviewed against this specification, not blindly regenerated.
+The Lab 1 scope is the scanner, diagnostics, tests, and documentation. Lab 2 adds
+expression parsing, operator precedence, AST printing, and parser diagnostics.
+Runtime typing, statements, rule evaluation, and RFID/CAD integration remain
+future work. Recognizing `watch` or `inspect` does not implement monitoring or
+inspection.
 
-From the repository root:
+## File Structure
 
-```bash
-curl -fSL https://raw.githubusercontent.com/WhiteLicorice/cmsc-124-harness/v1.1/run_tests.py -o run_tests.py
-./build.sh
-python3 run_tests.py tests/lab0
-python3 run_tests.py tests/lab1
-cargo test --locked
-```
-
-Do not commit the downloaded harness. The existing GitHub Actions workflow runs
-both fixture folders on push; local success does not establish remote CI status.
-There are no Lab 2–5 suites yet. Additional engineering checks are `cargo check
---locked`, `cargo clippy --locked --all-targets`, and `cargo fmt --check`; current
-formatting failures and unused-variant warnings are noted below.
-
-## Sample code
-
-These examples show tokenization, not execution. Save the first as `example.csl`
-with a final newline and run `./run --tokenize example.csl`:
-
-```text
-var greeting = "hello";
-```
-
-Output:
-
-```text
-Token(type=VAR, lexeme=var, literal=null, line=1)
-Token(type=IDENTIFIER, lexeme=greeting, literal=null, line=1)
-Token(type=EQUAL, lexeme==, literal=null, line=1)
-Token(type=STRING, lexeme="hello", literal=hello, line=1)
-Token(type=SEMICOLON, lexeme=;, literal=null, line=1)
-Token(type=EOF, lexeme=, literal=null, line=2)
-```
-
-The existing `tests/lab1/strings/string_multiline.csl` contains:
-
-```text
-"a
-b" next
-```
-
-Run `./run --tokenize tests/lab1/strings/string_multiline.csl`. Output:
-
-```text
-Token(type=STRING, lexeme="a\nb", literal=a\nb, line=1)
-Token(type=IDENTIFIER, lexeme=next, literal=null, line=2)
-Token(type=EOF, lexeme=, literal=null, line=3)
-```
-
-## Design rationale
-
-- Explicit punctuation keeps indentation out of scanning and leaves statement
-  boundaries visible; semicolons and braces are intended C-family conventions.
-- Whole-name keyword lookup allows `variable` and `iffy` without splitting them
-  into a keyword and a suffix. ASCII identifiers keep the naming rule explicit;
-  Unicode string contents remain supported.
-- One floating-point representation handles integer and decimal spellings without
-  separate scanner value types. Rejecting infinity avoids silently replacing an
-  oversized source value; this finite-number policy supplies our design-specific
-  third rejection case, rather than adding unneeded comment or escape features.
-- Raw strings and line comments limit scanner complexity. Multiline file strings
-  retain their actual contents; display-only escaping makes diagnostics and token
-  comparisons readable while distinguishing a real newline from backslash-plus-n.
-- CSL keywords reserve a vocabulary for event sources, capabilities, aggregation,
-  and responses. The cost is that users cannot reuse these names as identifiers;
-  recognizing them does not promise working monitoring operations.
-- Future runtime work should validate targets, capabilities, and permitted
-  operations before evaluation, then add deterministic event-window/group/count
-  behavior and simulated responses. Optional RFID/CAD integration would expose
-  only an enrolled-credential authorization result to the runtime, not raw RFID
-  access. Those adapters and their tests remain outside Lab 1.
-
-## Known limitations
-
-- No integrated parsing, evaluation, variable storage, event monitoring, response
-  execution, or RFID verification. The `--parse` route is only a prompt placeholder.
-- No string escape processing, block/nested comments, Unicode identifiers,
-  exponent literals, or exact/arbitrary-precision arithmetic.
-- REPL input is processed one line at a time; multiline strings require files.
-- Diagnostics report lines, not columns. CLI option validation and OS-error
-  formatting are not a stable language interface yet.
-- Rust `stable` is not an exact toolchain pin. Existing unused Boolean/Null literal
-  variants cause warnings, and `cargo fmt --check` reports formatting differences.
-  Cleanup and CI/toolchain hardening remain Steps 7–8.
-
-## Changelog
-
-| Activity | What changed in the language |
-| --- | --- |
-| Lab 1 | Established the token vocabulary, `.csl`, line comments, raw multiline strings, finite numeric literals, ordered lexical diagnostics, and scanner REPL. Numeric overflow now rejects with 65. Token display changed from raw text fields to escaped backslash/LF/CR/tab without altering stored values; ordinary token formatting remains compatible. Parsing and runtime semantics remain deferred. |
-
-This specification follows the [CMSC 124 language specification template](https://renscourses.netlify.app/articles/cmsc-124-spec)
-and the project's supplied Lab 1 PDF. The PDF remains authoritative for assignment
-requirements; language choices above state this project's current contract.
+| File name        | Purpose                                                                   |
+| ---------------- | ------------------------------------------------------------------------- |
+| `src/token.rs`   | Defines `TokenType`, `Literal`, and `Token`                               |
+| `src/scanner.rs` | Reads the raw source code character by character and turns it into tokens |
+| `src/expr.rs` | Defines expression AST nodes and their printed representation |
+| `src/parser.rs` | Parses expressions and recovers at file-expression boundaries |
+| `src/repl.rs` | Reads and parses one expression per input line |
+| `src/main.rs` | Dispatches the file parser, tokenizer, REPL, and Lab 0 command |
+| `tests/lab2/` | Parser fixtures with inline AST and diagnostic expectations |
+| `tests/cli.rs` | Checks CLI output, diagnostics, exit status, and REPL recovery |
+| `tests/cli_tests.rs` | Checks scanner regressions and default REPL compatibility |

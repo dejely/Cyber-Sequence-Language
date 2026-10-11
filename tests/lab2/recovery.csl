@@ -1,0 +1,5 @@
+1 + ; // expect error: [line 1] Error at ';': Expect expression.
+2 * ; // expect error: [line 2] Error at ';': Expect expression.
+3 + 4;
+(5 + 6; // expect error: [line 4] Error at ';': Expect ')' after expression.
+nil;
