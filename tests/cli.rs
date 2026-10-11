@@ -105,8 +105,8 @@ fn tokenizer_and_lab_zero_commands_preserve_existing_output() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     for (args, expected) in [
         (
-            vec!["--tokenize", "tests/lab1/categories.csl"],
-            "tests/lab1/categories.expected",
+            vec!["--tokenize", "tests/lab1/coverage/categories.csl"],
+            "tests/lab1/coverage/categories.expected",
         ),
         (vec!["tests/lab0/hello.src"], "tests/lab0/hello.expected"),
     ] {

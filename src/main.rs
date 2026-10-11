@@ -41,24 +41,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             );
         }
     };
-    // No arguments starts the prompt; keep --repl as an explicit alias.
-    if args.len() == 1 || args.get(1).map(String::as_str) == Some("--repl") {
-        repl::run_prompt()?;
-        return Ok(());
-    }
-
-    if args.get(1).map(String::as_str) == Some("--parse") {
-        repl::run_prompt()?;
-        return Ok(()); // place holder
-    }
-
-    // Preserve the Lab 0 greeting.
-    if args.get(1).map(String::as_str) != Some("--tokenize") {
-        println!("Hello, JM & Dejel!");
-        return Ok(());
-    }
-
-    let filename = args.get(2).ok_or("Usage: ./run --tokenize <file>")?;
     let source = std::fs::read_to_string(filename)?;
 
     // Finish scanning before printing, so an error leaves stdout empty.

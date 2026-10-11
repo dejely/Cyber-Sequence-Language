@@ -80,10 +80,10 @@ Identifiers, assignment, unary `+`, `and`/`or`, calls, arrays, declarations,
 and CSL rules remain outside this expression grammar even when their tokens
 are recognized. Chained comparisons are parsed left to right; no evaluation or
 type checking is performed. The scanner's existing numeric and raw-string
-rules still apply: exponent syntax is unsupported, oversized numbers can
-currently become `inf`, and large or small values may print in scientific
-notation. String output preserves embedded newlines and
-backslashes without display escaping. A lexical error rejects scanning before
+rules still apply: exponent syntax is unsupported, oversized numbers are
+rejected, and large or small values may print in scientific notation. AST string
+output preserves embedded newlines and backslashes without display escaping;
+token output escapes control characters and backslashes. A lexical error rejects scanning before
 the parser runs.
 
 ## Tests
@@ -116,8 +116,9 @@ monitoring and response sequences: watch an event source, group or count events
 within a time window, require a capability, then describe an alert or inspection.
 Its intended syntax combines explicit punctuation with domain words such as
 `watch`, `source`, and `sequence`. This CMSC 124 prototype currently implements
-lexical scanning only. Lab 1's deliverable is the scanner, diagnostics, tests,
-and this specification; parsing and evaluation are later milestones. Event
+lexical scanning and expression parsing. Lab 1 covers the scanner, diagnostics,
+tests, and lexical specification; Lab 2 adds expression ASTs and printing.
+Evaluation remains a later milestone. Event
 adapters and optional RFID credential verification remain future extensions,
 not dependencies of the three-month language prototype.
 
@@ -143,13 +144,13 @@ to build or run the interpreter.
 
 | Command | Current behavior |
 | --- | --- |
-| `./run` | Starts the scanner REPL |
-| `./run --repl` | Explicit alias for the scanner REPL |
+| `./run` | Starts the expression REPL |
+| `./run --repl` | Explicit alias for the expression REPL |
 | `./run --tokenize <file>` | Scans a UTF-8 source file and prints tokens |
 | `./run tests/lab0/hello.src` | Prints `Hello, JM & Dejel!` for Lab 0 compatibility |
-| `./run <file>` | Currently prints the legacy greeting; does not execute the file |
-| `./run --parse <file>` | Placeholder: opens the scanner REPL and does not parse the file |
-| `./run --eval <file>` | Not implemented; currently falls through to the legacy greeting |
+| `./run <file>` | Parses expressions; positional `.src` files retain the Lab 0 greeting |
+| `./run --parse <file>` | Scans the file, parses expressions, and prints ASTs |
+| `./run --eval <file>` | Not implemented; reports a usage error with exit 1 |
 
 Example file invocation:
 
@@ -157,15 +158,15 @@ Example file invocation:
 ./run --tokenize tests/lab1/coverage/categories.csl
 ```
 
-The REPL prints `> `, scans one input line, and prints tokens or diagnostics.
-Each line is independent, with line numbering starting at 1; `var x = 1;` does
-not create a variable. A bad line such as `#` reports an error and returns to the
+The REPL prints `> `, scans and parses one input line, and prints an AST or diagnostics.
+Each line is independent, with line numbering starting at 1; `var x = 1;` is
+rejected by the expression grammar. A bad line such as `#` reports an error and returns to the
 prompt. End input with EOF (Ctrl-D on Unix-like terminals). Multiline strings
 must be scanned from files because the REPL does not accumulate input lines.
 
-Clean file scans and normal REPL exit use code 0. Lexically rejected files use
-65, with diagnostics on stderr and no stdout. Missing/unreadable input files or
-missing `--tokenize` filenames currently use code 1 through Rust's error return.
+Clean file scans or parses and normal REPL exit use code 0. Lexically or
+syntactically rejected files use 65, with diagnostics on stderr and no stdout.
+Missing/unreadable input files or invalid arguments use code 1 through Rust's error return.
 Runtime exit 70 is reserved for later work and is not implemented.
 
 ## File extension
@@ -220,23 +221,25 @@ none of these keywords currently executes statements or CSL operations.
 
 ### Operators
 
-Arity describes the intended language operation; the scanner only emits tokens.
-Precedence and associativity are deferred until the Lab 2 grammar.
+The scanner emits operator tokens; the parser applies the precedence and
+associativity below. Levels increase from equality (1) to unary (5); literals
+and grouping are primary expressions. Assignment and logical conjunction or
+disjunction are recognized only by the scanner.
 
 | Operator | Token type | Category | Operands | Associativity | Precedence |
 | --- | --- | --- | --- | --- | --- |
-| `+` | `PLUS` | Arithmetic addition | Binary | Deferred | Deferred |
-| `-` | `MINUS` | Subtraction / negation | Binary / unary | Deferred | Deferred |
-| `*` | `STAR` | Arithmetic multiplication | Binary | Deferred | Deferred |
-| `/` | `SLASH` | Arithmetic division | Binary | Deferred | Deferred |
+| `+` | `PLUS` | Arithmetic addition | Binary | Left | 3 |
+| `-` | `MINUS` | Subtraction / negation | Binary / unary | Left / right | 3 / 5 |
+| `*` | `STAR` | Arithmetic multiplication | Binary | Left | 4 |
+| `/` | `SLASH` | Arithmetic division | Binary | Left | 4 |
 | `=` | `EQUAL` | Assignment | Binary | Deferred | Deferred |
-| `==` | `EQUAL_EQUAL` | Equality | Binary | Deferred | Deferred |
-| `!=` | `BANG_EQUAL` | Inequality | Binary | Deferred | Deferred |
-| `<` | `LESS` | Comparison | Binary | Deferred | Deferred |
-| `<=` | `LESS_EQUAL` | Comparison | Binary | Deferred | Deferred |
-| `>` | `GREATER` | Comparison | Binary | Deferred | Deferred |
-| `>=` | `GREATER_EQUAL` | Comparison | Binary | Deferred | Deferred |
-| `!` | `BANG` | Logical negation | Unary | Deferred | Deferred |
+| `==` | `EQUAL_EQUAL` | Equality | Binary | Left | 1 |
+| `!=` | `BANG_EQUAL` | Inequality | Binary | Left | 1 |
+| `<` | `LESS` | Comparison | Binary | Left | 2 |
+| `<=` | `LESS_EQUAL` | Comparison | Binary | Left | 2 |
+| `>` | `GREATER` | Comparison | Binary | Left | 2 |
+| `>=` | `GREATER_EQUAL` | Comparison | Binary | Left | 2 |
+| `!` | `BANG` | Logical negation | Unary | Right | 5 |
 | `and` | `AND` | Logical conjunction | Binary | Deferred | Deferred |
 | `or` | `OR` | Logical disjunction | Binary | Deferred | Deferred |
 
@@ -331,8 +334,8 @@ are documentation, not regular expressions used by the implementation.
 | --- | --- | --- |
 | Number | `42`, `3.14`; `[0-9]+(\.[0-9]+)?` | `NUMBER` with finite `f64` value |
 | String | `"hello"`, `""`, or quoted multiline text | `STRING` with contents excluding quotes |
-| Boolean | `true`, `false` | Keyword tokens without literal values; future Boolean values |
-| Nil | `nil` | Keyword token without a literal value; future absence of a value |
+| Boolean | `true`, `false` | Keyword tokens; the parser creates Boolean AST literals |
+| Nil | `nil` | Keyword token; the parser creates a null AST literal |
 
 Numbers use floating-point rounding; tiny values may round to zero. Conversion
 failure or overflow to infinity is rejected. A number consisting of 400 `9`
@@ -420,17 +423,17 @@ Every successful scan ends with exactly one `EOF`. Files ending with LF place
 EOF on the next line; a final newline is therefore significant to token positions.
 This output contract is frozen for Lab 1; format changes are recorded below.
 
-## Grammar
+## Parser implementation
 
-Deferred to Lab 2. No integrated parser or complete context-free grammar exists.
-The preliminary `src/parser.rs` is not declared as a module by `src/main.rs`.
-Lexical patterns above are implemented; expression precedence and statement
-syntax validation are not. Recognizing a keyword does not validate its use.
+The [expression grammar](#grammar) is implemented in `src/parser.rs` and
+integrated through `src/main.rs`. It validates expression syntax and builds
+the AST nodes in `src/expr.rs`. Statement and CSL rule grammars remain deferred.
 
 ## Parse output format
 
-Deferred to Lab 2. There is no tree-output contract yet; `--parse` currently
-opens the scanner REPL as a placeholder.
+The AST printer uses parenthesized prefix notation, as documented in the
+[expression grammar](#grammar). Files print one AST per expression after the
+whole file parses successfully; the REPL prints one AST per successful entry.
 
 ## Semantics
 
@@ -473,7 +476,7 @@ Deferred to Lab 5. No native functions are callable. `inspect`, `isolate`, and
 
 | Condition | Diagnostic example | File exit code |
 | --- | --- | --- |
-| `./run --tokenize tests/lab1/categories.csl` | Prints tokens | Preserve |
+| `./run --tokenize tests/lab1/coverage/categories.csl` | Prints tokens | Preserve |
 | `./run --repl` | Parses one expression per line; a bad line does not end the session | Implemented |
 | `./run` | Starts the expression REPL | Implemented |
 | `./run tests/lab0/hello.src` | Prints `Hello, JM & Dejel!` | Preserve legacy Lab 0 behavior |
@@ -500,14 +503,14 @@ rejects it; it does not create a variable.
 
 Explicit punctuation avoids indentation-sensitive scanning. Whole-name keyword
 lookup keeps identifiers such as `variable` usable. Raw strings and line comments
-keep the initial scanner small enough to explain and test; finite numeric values
-and readable token records remain planned scanner refinements.
+keep the scanner small enough to explain and test. Finite numeric values
+and escaped token records are now implemented.
 
 The Lab 1 scope is the scanner, diagnostics, tests, and documentation. Lab 2 adds
 expression parsing, operator precedence, AST printing, and parser diagnostics.
 Runtime typing, statements, rule evaluation, and RFID/CAD integration remain
 future work. Recognizing `watch` or `inspect` does not implement monitoring or
-inspection. The full course-template README reorganization remains deferred.
+inspection.
 
 ## File Structure
 
@@ -521,3 +524,4 @@ inspection. The full course-template README reorganization remains deferred.
 | `src/main.rs` | Dispatches the file parser, tokenizer, REPL, and Lab 0 command |
 | `tests/lab2/` | Parser fixtures with inline AST and diagnostic expectations |
 | `tests/cli.rs` | Checks CLI output, diagnostics, exit status, and REPL recovery |
+| `tests/cli_tests.rs` | Checks scanner regressions and default REPL compatibility |

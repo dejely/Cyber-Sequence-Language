@@ -75,9 +75,9 @@ before marking implementation work complete.
 
 - [x] `./build.sh`
 - [x] `python3 run_tests.py tests/lab0` — 1/1 passed.
-- [x] `python3 run_tests.py tests/lab1` — 8/8 passed.
+- [x] `python3 run_tests.py tests/lab1` — 20/20 passed.
 - [x] `python3 run_tests.py tests/lab2` — 19/19 passed.
-- [x] `cargo test` — 9 unit tests and 7 CLI integration tests passed.
+- [x] `cargo test` — 14 unit tests and 15 CLI integration tests passed.
 
 The parser now constructs `Literal::Boolean` and `Literal::Null`; their previous
 dead-code warnings are resolved. The release build completed without warnings.
