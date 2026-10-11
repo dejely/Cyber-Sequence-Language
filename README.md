@@ -1,8 +1,110 @@
 # Design and Implementation of Programming Languages(CMSC124): Interpreter
 
-This repository currently implements scanning only. Token purposes below describe
-intended language semantics; declarations, expressions, and CSL operations are
-not parsed or executed yet.
+This repository implements a scanner and a recursive descent expression parser.
+The parser builds and prints an abstract syntax tree (AST); it does not evaluate
+expressions. Token purposes below describe intended language semantics.
+Declarations, statements, and CSL operations are not parsed or executed yet.
+
+## Running the interpreter
+
+Build with `./build.sh`, then use `./run`, `./run --repl`, or `./run --parse`
+to start the expression REPL. Enter one expression per line; the REPL prints its
+AST and continues after scanning or parsing errors. Ctrl-D ends the session on
+Unix. Each entered line starts at source line 1, and the `> ` prompt is printed
+before each read, including the final read that reaches EOF.
+
+Use `./run --parse <file>` to parse a file, or pass a `.csl` filename directly.
+The original `./run tests/lab0/hello.src` invocation still prints the Lab 0
+greeting. Positional `.src` files use that compatibility behavior; an explicit
+`--parse` parses files regardless of their extension. Use
+`./run --tokenize <file>` for the unchanged Lab 1 token output.
+
+For example, `./run --parse tests/lab2/precedence.csl` prints:
+
+```text
+(- (+ 1.0 (* 2.0 3.0)) 4.0)
+```
+
+Successful files exit 0. Scanning or parsing errors go to stderr and exit 65,
+with no ASTs or tokens printed to stdout. Argument and file-access errors exit 1.
+The REPL reports errors on stderr and stays open; reaching EOF exits 0 even if
+an earlier entry failed.
+
+## Grammar
+
+The implemented expression grammar follows the
+[Lab 2 brief](docs/labs/lab2.md). Precedence increases from equality through
+primary expressions:
+
+```text
+expression → equality
+equality   → comparison ( ( "!=" | "==" ) comparison )*
+comparison → term ( ( ">" | ">=" | "<" | "<=" ) term )*
+term       → factor ( ( "-" | "+" ) factor )*
+factor     → unary ( ( "/" | "*" ) unary )*
+unary      → ( "!" | "-" ) unary | primary
+primary    → NUMBER | STRING | "true" | "false" | "nil" | "(" expression ")"
+
+file       → expression ( ";" expression )* ";"? EOF
+repl       → expression ";"? EOF
+```
+
+Binary operators associate to the left: `10 - 3 - 2` prints
+`(- (- 10.0 3.0) 2.0)`. Unary operators nest to the right: `--10` prints
+`(- (- 10.0))`. Parentheses produce an explicit `group` node, so
+`(1 + 2) * 3` prints `(* (group (+ 1.0 2.0)) 3.0)`. Ordinary integral numbers
+print with `.0`, strings print their contents without quotes, booleans print `true` or
+`false`, and `nil` prints `nil`. These are tree representations, not results:
+even `1 / 0` is a valid expression to parse.
+
+Files may contain several expressions separated by semicolons, with an optional
+final semicolon. Newlines remain whitespace, so a file expression may span
+lines. The REPL accepts one complete expression per entry, also with an optional
+final semicolon; it does not collect multiline expressions. Neither interface
+silently accepts trailing tokens. Empty or comment-only input is an error, as
+in the laboratory examples, and repeated semicolons create empty expressions
+that are also rejected.
+
+After a file parsing error, the parser skips through the next semicolon and
+tries the following expression. It collects diagnostics in source order and
+rejects the whole file if any expression failed. Without a semicolon, recovery
+reaches EOF. For example, `1 + ;` on line 1 followed by `2 * ;` on line 2
+reports both errors:
+
+```text
+[line 1] Error at ';': Expect expression.
+[line 2] Error at ';': Expect expression.
+```
+
+Identifiers, assignment, unary `+`, `and`/`or`, calls, arrays, declarations,
+and CSL rules remain outside this expression grammar even when their tokens
+are recognized. Chained comparisons are parsed left to right; no evaluation or
+type checking is performed. The scanner's existing numeric and raw-string
+rules still apply: exponent syntax is unsupported, oversized numbers can
+currently become `inf`, and large or small values may print in scientific
+notation. String output preserves embedded newlines and
+backslashes without display escaping. A lexical error rejects scanning before
+the parser runs.
+
+## Tests
+
+Run the three laboratory suites after building:
+
+```sh
+./build.sh
+python3 run_tests.py tests/lab0
+python3 run_tests.py tests/lab1
+python3 run_tests.py tests/lab2
+cargo test
+```
+
+The course harness is downloaded by CI from
+[`cmsc-124-harness/v1.1`](https://github.com/WhiteLicorice/cmsc-124-harness/blob/v1.1/run_tests.py)
+and is ignored locally. Lab 0 and Lab 1 retain their sidecar expectations.
+Lab 2 uses inline `// expect:` and `// expect error:` annotations so the
+harness checks AST output, stderr diagnostics, and exit status. Rust tests also
+check exact diagnostics, suppression of partial output, CLI arguments, and
+REPL continuation. CI runs all three laboratory suites and `cargo test`.
 
 ## Lexical Grammar
 
@@ -102,8 +204,9 @@ Cyber Sequence Language (CSL) is the proposed domain language for describing
 authorized monitoring and response sequences. A CSL rule can identify an event
 source, group or count matching events in a time window, state the capability
 it needs, and describe the sequence that should produce an alert or an
-inspection result. The interpreter currently tokenizes CSL source; parsing,
-validation, and rule execution are still planned work.
+inspection result. The interpreter currently tokenizes CSL source and parses
+the expression grammar above; CSL rule parsing, validation, and execution
+are still planned work.
 
 CSL also has an optional hardware-verification component. An RFID reader can
 act as a credential access device (CAD): before a protected rule or response is
@@ -123,7 +226,7 @@ raw RFID access to every rule.
   and `execute`.
 * Optional RFID/CAD authorization verification before protected operations.
 
-### CSL keyword tracker
+### CSL keyword trackerz  
 
 The checked items are recognized by the current scanner. They still need parser
 rules and runtime behavior before they become usable CSL statements.
@@ -248,37 +351,40 @@ pending Step 3; its exact diagnostic will be documented with that implementation
 | Interface or environment | Current behavior | Agreed target |
 | --- | --- | --- |
 | `./run --tokenize tests/lab1/categories.csl` | Prints tokens | Preserve |
-| `./run --repl` | Scans each input line; a bad line does not end the session | Preserve as an alias |
-| `./run` | Prints the Lab 0 greeting | **Step 2:** start the REPL |
+| `./run --repl` | Parses one expression per line; a bad line does not end the session | Implemented |
+| `./run` | Starts the expression REPL | Implemented |
 | `./run tests/lab0/hello.src` | Prints `Hello, JM & Dejel!` | Preserve legacy Lab 0 behavior |
 | Rust toolchain | `stable` in `rust-toolchain.toml` | **Step 8:** pin audited version `1.98.0` |
 
 CSL source uses `.csl`; the `.src` Lab 0 fixture remains a compatibility exception.
-The default REPL change will satisfy the PDF's no-argument contract while keeping
-the earlier harness invocation working.
+The default REPL satisfies the no-argument interface while keeping the
+earlier Lab 0 harness invocation working.
 
 ### Intended syntax and deferred semantics
 
 CSL is intended to be dynamically typed. Rust's static types describe the scanner
-implementation, not an implemented CSL type system. For example, `var x = 1;`
-currently produces tokens only; it does not create a variable.
+and parser implementation, not an implemented CSL type system. For example,
+`var x = 1;` produces tokens with `--tokenize`, but the expression parser
+rejects it; it does not create a variable.
 
 * `{}` will delimit blocks, as in `{ print x; }`.
 * `[]` is reserved for arrays/indexing, as in `items[0]`.
 * `;` will terminate statements, as in `print x;`.
-* `()` will group expressions and calls, as in `(1 + 2)` and `inspect(host)`.
+* `()` groups expressions such as `(1 + 2)`; calls such as `inspect(host)`
+  remain planned.
 * Reserved words such as `if`, `else`, `for`, `fun`, `and`, and `var` are already
   recognized; their execution semantics remain deferred.
 
 Explicit punctuation avoids indentation-sensitive scanning. Whole-name keyword
 lookup keeps identifiers such as `variable` usable. Raw strings and line comments
 keep the initial scanner small enough to explain and test; finite numeric values
-and readable token records are the next agreed refinements.
+and readable token records remain planned scanner refinements.
 
-The Lab 1 scope is the scanner, diagnostics, tests, and documentation. Parsing,
-operator precedence, runtime typing, rule evaluation, and RFID/CAD integration
-remain future work. Recognizing `watch` or `inspect` does not implement monitoring
-or inspection. The full course-template README reorganization is Step 6.
+The Lab 1 scope is the scanner, diagnostics, tests, and documentation. Lab 2 adds
+expression parsing, operator precedence, AST printing, and parser diagnostics.
+Runtime typing, statements, rule evaluation, and RFID/CAD integration remain
+future work. Recognizing `watch` or `inspect` does not implement monitoring or
+inspection. The full course-template README reorganization remains deferred.
 
 ## File Structure
 
@@ -286,3 +392,9 @@ or inspection. The full course-template README reorganization is Step 6.
 | ---------------- | ------------------------------------------------------------------------- |
 | `src/token.rs`   | Defines `TokenType`, `Literal`, and `Token`                               |
 | `src/scanner.rs` | Reads the raw source code character by character and turns it into tokens |
+| `src/expr.rs` | Defines expression AST nodes and their printed representation |
+| `src/parser.rs` | Parses expressions and recovers at file-expression boundaries |
+| `src/repl.rs` | Reads and parses one expression per input line |
+| `src/main.rs` | Dispatches the file parser, tokenizer, REPL, and Lab 0 command |
+| `tests/lab2/` | Parser fixtures with inline AST and diagnostic expectations |
+| `tests/cli.rs` | Checks CLI output, diagnostics, exit status, and REPL recovery |
