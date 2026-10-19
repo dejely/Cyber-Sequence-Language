@@ -16,7 +16,8 @@ pub fn evaluate(expression: &Expr) -> Result<Value, String> {
             match (operator.token_type(), right) {
                 (TokenType::Minus, Value::Number(value)) => number(-value, operator),
                 (TokenType::Bang, value) => Ok(Value::Boolean(!value.is_truthy())),
-                _ => Err(error(operator, "Invalid unary operator or operand.")),
+                (TokenType::Minus, _) => Err(error(operator, "Operand must be a number.")),
+                _ => Err(error(operator, "Unsupported unary operator.")),
             }
         }
         Expr::Binary {
@@ -47,7 +48,11 @@ pub fn evaluate(expression: &Expr) -> Result<Value, String> {
                     TokenType::LessEqual => Ok(Value::Boolean(left <= right)),
                     _ => Err(error(operator, "Unsupported binary operator.")),
                 },
-                _ => Err(error(operator, "Incompatible operand types.")),
+                (_, TokenType::Plus, _) => Err(error(
+                    operator,
+                    "Operands must be two numbers or two strings.",
+                )),
+                _ => Err(error(operator, "Operands must be numbers.")),
             }
         }
     }

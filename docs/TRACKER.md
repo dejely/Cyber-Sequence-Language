@@ -1,10 +1,8 @@
 # CMSC 124 Progress Tracker
 
-**Last repository verification:** 2026-10-11
+**Last repository verification:** 2026-10-20
 
-**Current milestone:** Lab 2 — expression parser and AST printer
-
-**Course reference:** [Lab 1 implementation notes](https://renscourses.netlify.app/articles/cmsc-124-lab1#implementation-notes)
+**Current milestone:** Lab 3 — evaluator through Week 2
 
 This tracker records what the repository implements today. A checked item has
 been verified against the source and the listed test command. An unchecked item
@@ -95,7 +93,8 @@ dead-code warnings are resolved. The release build completed without warnings.
 - [x] Parse numeric, string, boolean, and nil literals and parentheses.
 - [x] Print ASTs in the laboratory's parenthesized format.
 - [x] Parse files with `./run --parse <file>` and positional `.csl` files.
-- [x] Use the parser in the default REPL, `--repl`, and `--parse` without a file.
+- [x] Use the parser in the default REPL, `--repl`, and `--parse` without a file;
+  `--parse` prints ASTs while the default REPL and `--repl` evaluate values.
 - [x] Add Lab 2 fixtures for precedence, associativity, literals, and grouping.
 
 ### Week 3
@@ -108,19 +107,38 @@ dead-code warnings are resolved. The release build completed without warnings.
 - [x] Verify Labs 0, 1, and 2 and add Lab 2 plus Rust tests to CI.
 - [x] Document the implemented grammar, file separators, AST formatting, and quirks.
 
-## Future Laboratories
+## Lab 3 — Expression Evaluator
 
-Add each laboratory below as soon as its README or PDF is available. Keep the
-course material in the repository, preferably under `docs/labs/`, and use a
-relative link so the tracker remains useful after cloning the project.
+**Course reference:** CMSC 124 Lab 3 evaluator PDF supplied with the project instructions.
 
-### Lab 3 and later
+### Week 1
 
-- [ ] Add the laboratory README or PDF under `docs/labs/`.
-- [ ] Link the exact brief here and record its submission requirements.
-- [ ] Translate each requirement into implementation and test checklist items.
-- [ ] Record the build and test commands used to verify the laboratory.
-- [ ] Update this tracker only after the source and tests support the status.
+- [x] Represent runtime numbers, strings, booleans, and nil with a Rust enum.
+- [x] Evaluate literals, grouping, and arithmetic expressions.
+
+### Week 2
+
+- [x] Evaluate every operator produced by the expression parser.
+- [x] Check operand types at runtime, including unary negation, arithmetic,
+  comparisons, and string concatenation.
+- [x] Define truthiness, equality, division by zero, and value printing.
+- [x] Add inline Lab 3 fixtures covering values, operators, and errors.
+- [x] Support `./run --eval <file>` and a value-printing default REPL while
+  preserving `--tokenize` and `--parse`.
+
+### Week 3 and defense readiness
+
+- [x] Distinguish static errors (65) from runtime errors (70) in file mode.
+- [x] Continue the REPL after a runtime error.
+- [ ] Add Lab 3 to CI and verify all four laboratory suites there.
+- [ ] Prepare individual reflection and peer assessment after the defense.
+
+### Local verification on 2026-10-20
+
+- [x] `./build.sh`
+- [x] `cargo test` — 19 integration tests passed.
+- [x] Course harness: Lab 0 (1/1), Lab 1 (20/20), Lab 2 (19/19),
+  and Lab 3 (13/13) passed locally.
 
 ## Update procedure
 

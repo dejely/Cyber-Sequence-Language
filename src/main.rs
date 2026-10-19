@@ -16,18 +16,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let (filename, parse, evaluate) = match &args[1..] {
         [] => {
-            repl::run_prompt(false)?;
-            return Ok(());
-        }
-        [flag] if flag == "--repl" || flag == "--parse" => {
-            repl::run_prompt(false)?;
-            return Ok(());
-        }
-        [flag] if flag == "--evaluate" => {
             repl::run_prompt(true)?;
             return Ok(());
         }
-        [flag, filename] if flag == "--evaluate" => (filename, true, true),
+        [flag] if flag == "--repl" => {
+            repl::run_prompt(true)?;
+            return Ok(());
+        }
+        [flag] if flag == "--parse" => {
+            repl::run_prompt(false)?;
+            return Ok(());
+        }
+        [flag] if flag == "--eval" || flag == "--evaluate" => {
+            repl::run_prompt(true)?;
+            return Ok(());
+        }
+        [flag, filename] if flag == "--eval" || flag == "--evaluate" => (filename, true, true),
         [flag, filename] if flag == "--tokenize" => (filename, false, false),
         [flag, filename] if flag == "--parse" => (filename, true, false),
         [filename] if !filename.starts_with('-') => {
@@ -44,7 +48,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         _ => {
             return Err(
-                "Usage: ./run [--repl | --parse [file] | --evaluate [file] | --tokenize <file> | <file>]".into(),
+                "Usage: ./run [--repl | --parse [file] | --eval [file] | --tokenize <file> | <file>]".into(),
             );
         }
     };

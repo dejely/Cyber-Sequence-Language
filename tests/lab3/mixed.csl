@@ -1,0 +1,2 @@
+((3 + 4) * 2 - 5) / 3 == 3; // expect: true
+1 + 2 * 3 > 6 == !nil; // expect: true

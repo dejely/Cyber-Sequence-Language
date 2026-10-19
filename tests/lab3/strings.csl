@@ -1,0 +1,4 @@
+"a" + "b"; // expect: ab
+"" + "hello"; // expect: hello
+"ab" == "ab"; // expect: true
+"ab" != "ac"; // expect: true

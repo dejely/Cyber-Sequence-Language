@@ -1,0 +1,6 @@
+!true; // expect: false
+!false; // expect: true
+!nil; // expect: true
+!"hello"; // expect: false
+!0; // expect: false
+!!""; // expect: true
