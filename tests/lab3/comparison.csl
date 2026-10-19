@@ -1,0 +1,6 @@
+2 < 3; // expect: true
+3 < 3; // expect: false
+3 <= 3; // expect: true
+4 > 3; // expect: true
+3 > 3; // expect: false
+3 >= 3; // expect: true

@@ -1,0 +1,7 @@
+2 == 2; // expect: true
+2 != 3; // expect: true
+1 == "1"; // expect: false
+nil == nil; // expect: true
+nil != false; // expect: true
+true == true; // expect: true
+false != true; // expect: true

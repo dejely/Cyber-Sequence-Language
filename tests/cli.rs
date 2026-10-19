@@ -163,7 +163,7 @@ fn evaluation_repl_recovers_after_runtime_errors() {
     assert!(output.status.success());
     assert_eq!(output.stdout, b"> > > > 42\n> ");
     let errors = String::from_utf8(output.stderr).unwrap();
-    assert!(errors.contains("Incompatible operand types."));
+    assert!(errors.contains("Operands must be two numbers or two strings."));
     assert_eq!(errors.matches("Division by zero.").count(), 2);
 }
 
