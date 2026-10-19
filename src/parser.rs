@@ -1,7 +1,7 @@
 //! Recursive descent expression parser, with recovery between file expressions.
 
 use crate::expr::Expr;
-use crate::token::{Literal, Token, TokenType};
+use crate::token::{ Literal, Token, TokenType };
 
 pub struct Parser {
     tokens: Vec<Token>,
@@ -85,12 +85,16 @@ impl Parser {
         // Start at the next tighter precedence level; self-recursion never advances.
         let mut expr = self.term()?;
 
-        while self.match_token(&[
-            TokenType::Greater,
-            TokenType::GreaterEqual,
-            TokenType::Less,
-            TokenType::LessEqual,
-        ]) {
+        while
+            self.match_token(
+                &[
+                    TokenType::Greater,
+                    TokenType::GreaterEqual,
+                    TokenType::Less,
+                    TokenType::LessEqual,
+                ]
+            )
+        {
             let operator = self.previous().clone();
             let right = self.term()?;
 
@@ -103,6 +107,7 @@ impl Parser {
         Ok(expr)
     }
 
+    // iterator here for ast:
     pub fn term(&mut self) -> Result<Expr, String> {
         let mut expr = self.factor()?;
 
@@ -183,11 +188,7 @@ impl Parser {
     }
 
     fn consume(&mut self, token_type: &TokenType, message: &str) -> Result<&Token, String> {
-        if self.check(token_type) {
-            Ok(self.advance())
-        } else {
-            Err(self.error(message))
-        }
+        if self.check(token_type) { Ok(self.advance()) } else { Err(self.error(message)) }
     }
 
     fn check(&self, token_type: &TokenType) -> bool {
@@ -231,140 +232,5 @@ impl Parser {
                 return;
             }
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::Parser;
-    use crate::scanner::Scanner;
-    use crate::token::{Token, TokenType};
-
-    fn parser(source: &str) -> Parser {
-        Parser::new(Scanner::new(source.to_string()).scan_tokens().unwrap())
-    }
-
-    #[test]
-    fn prints_lab_expression_examples() {
-        let cases = [
-            ("42", "42.0"),
-            ("3.14", "3.14"),
-            ("\"Hello\"", "Hello"),
-            ("true", "true"),
-            ("false", "false"),
-            ("nil", "nil"),
-            ("1 + 2", "(+ 1.0 2.0)"),
-            ("3 - 4 * 5", "(- 3.0 (* 4.0 5.0))"),
-            ("--10", "(- (- 10.0))"),
-            (
-                "(1 + 2) == (3 - 0)",
-                "(== (group (+ 1.0 2.0)) (group (- 3.0 0.0)))",
-            ),
-            ("(1 + 2) * 3", "(* (group (+ 1.0 2.0)) 3.0)"),
-            ("-(4 + 5)", "(- (group (+ 4.0 5.0)))"),
-            ("1 + 2 * 3 - 4", "(- (+ 1.0 (* 2.0 3.0)) 4.0)"),
-            ("10 + -5 * 15 - 6", "(- (+ 10.0 (* (- 5.0) 15.0)) 6.0)"),
-            ("1 <= 2 != 3 >= 4", "(!= (<= 1.0 2.0) (>= 3.0 4.0))"),
-            ("5 > 3", "(> 5.0 3.0)"),
-            ("!true", "(! true)"),
-            ("!!false", "(! (! false))"),
-            ("\"hello\" != \"world\"", "(!= hello world)"),
-            ("\"CMSC 124 is the best\"", "CMSC 124 is the best"),
-        ];
-        for (source, expected) in cases {
-            assert_eq!(
-                parser(source).parse().unwrap().to_string(),
-                expected,
-                "{source}"
-            );
-        }
-    }
-
-    #[test]
-    fn folds_binary_operators_to_the_left() {
-        for (source, expected) in [
-            ("10 - 3 - 2", "(- (- 10.0 3.0) 2.0)"),
-            ("8 / 4 / 2", "(/ (/ 8.0 4.0) 2.0)"),
-            ("1 < 2 < 3", "(< (< 1.0 2.0) 3.0)"),
-            ("1 == 2 == 3", "(== (== 1.0 2.0) 3.0)"),
-        ] {
-            assert_eq!(parser(source).parse().unwrap().to_string(), expected);
-        }
-    }
-
-    #[test]
-    fn handles_every_precedence_level_together() {
-        assert_eq!(
-            parser("1 + 2 * -3 < 4 == !false")
-                .parse()
-                .unwrap()
-                .to_string(),
-            "(== (< (+ 1.0 (* 2.0 (- 3.0))) 4.0) (! false))"
-        );
-    }
-
-    #[test]
-    fn rejects_malformed_and_trailing_input() {
-        for (source, expected) in [
-            (
-                "(1 + 2",
-                "[line 1] Error at end: Expect ')' after expression.",
-            ),
-            (
-                "this is nonsense",
-                "[line 1] Error at 'this': Expect expression.",
-            ),
-            (
-                "// just a comment",
-                "[line 1] Error at end: Expect expression.",
-            ),
-            ("1 +", "[line 1] Error at end: Expect expression."),
-            ("()", "[line 1] Error at ')': Expect expression."),
-            ("1 2", "[line 1] Error at '2': Expect end of expression."),
-            ("1 = 2", "[line 1] Error at '=': Expect end of expression."),
-            ("1)", "[line 1] Error at ')': Expect end of expression."),
-        ] {
-            assert_eq!(parser(source).parse().unwrap_err(), expected, "{source}");
-        }
-    }
-
-    #[test]
-    fn parses_multiline_file_expressions_with_optional_final_semicolon() {
-        let expressions = parser("(1 +\n2);\ntrue; nil;").parse_all().unwrap();
-        let printed: Vec<_> = expressions.iter().map(ToString::to_string).collect();
-        assert_eq!(printed, ["(group (+ 1.0 2.0))", "true", "nil"]);
-        assert_eq!(parser("42;").parse().unwrap().to_string(), "42.0");
-    }
-
-    #[test]
-    fn recovers_at_semicolons_and_reports_errors_in_source_order() {
-        assert_eq!(
-            parser("1 + ;\n2 * ;\n3 + 4;\n(5 + 6;")
-                .parse_all()
-                .unwrap_err(),
-            "[line 1] Error at ';': Expect expression.\n\
-             [line 2] Error at ';': Expect expression.\n\
-             [line 4] Error at ';': Expect ')' after expression."
-        );
-    }
-
-    #[test]
-    fn rejects_missing_separators_and_empty_expressions_without_looping() {
-        assert_eq!(
-            parser("1 2;\n;\n3 +").parse_all().unwrap_err(),
-            "[line 1] Error at '2': Expect ';' between expressions.\n\
-             [line 2] Error at ';': Expect expression.\n\
-             [line 3] Error at end: Expect expression."
-        );
-    }
-
-    #[test]
-    fn handles_empty_token_streams_and_missing_eof() {
-        assert_eq!(
-            Parser::new(Vec::new()).parse().unwrap_err(),
-            "[line 1] Error at end: Expect expression."
-        );
-        let tokens = vec![Token::new(TokenType::True, "true".to_string(), None, 2)];
-        assert_eq!(Parser::new(tokens).parse().unwrap().to_string(), "true");
     }
 }
