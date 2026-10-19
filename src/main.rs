@@ -1,10 +1,12 @@
 //! CLI entry point for scanning files, parsing expressions, and the REPL.
 
+mod evaluator;
 mod expr;
 mod parser;
 mod repl;
 mod scanner;
 mod token;
+mod value;
 
 use parser::Parser;
 use scanner::Scanner;
@@ -12,17 +14,22 @@ use scanner::Scanner;
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = std::env::args().collect();
 
-    let (filename, parse) = match &args[1..] {
+    let (filename, parse, evaluate) = match &args[1..] {
         [] => {
-            repl::run_prompt()?;
+            repl::run_prompt(false)?;
             return Ok(());
         }
         [flag] if flag == "--repl" || flag == "--parse" => {
-            repl::run_prompt()?;
+            repl::run_prompt(false)?;
             return Ok(());
         }
-        [flag, filename] if flag == "--tokenize" => (filename, false),
-        [flag, filename] if flag == "--parse" => (filename, true),
+        [flag] if flag == "--evaluate" => {
+            repl::run_prompt(true)?;
+            return Ok(());
+        }
+        [flag, filename] if flag == "--evaluate" => (filename, true, true),
+        [flag, filename] if flag == "--tokenize" => (filename, false, false),
+        [flag, filename] if flag == "--parse" => (filename, true, false),
         [filename] if !filename.starts_with('-') => {
             // Preserve the original Lab 0 fixture invocation.
             if std::path::Path::new(filename)
@@ -33,11 +40,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 println!("Hello, JM & Dejel!");
                 return Ok(());
             }
-            (filename, true)
+            (filename, true, false)
         }
         _ => {
             return Err(
-                "Usage: ./run [--repl | --parse [file] | --tokenize <file> | <file>]".into(),
+                "Usage: ./run [--repl | --parse [file] | --evaluate [file] | --tokenize <file> | <file>]".into(),
             );
         }
     };
@@ -52,11 +59,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     };
     if parse {
-        // Print only after every expression succeeds, keeping failed files silent.
+        // Parse the whole file before printing, keeping syntax failures silent.
         match Parser::new(tokens).parse_all() {
             Ok(expressions) => {
                 for expression in expressions {
-                    println!("{expression}");
+                    if evaluate {
+                        match evaluator::evaluate(&expression) {
+                            Ok(value) => println!("{value}"),
+                            Err(message) => {
+                                eprintln!("{message}");
+                                std::process::exit(70);
+                            }
+                        }
+                    } else {
+                        println!("{expression}");
+                    }
                 }
             }
             Err(message) => {

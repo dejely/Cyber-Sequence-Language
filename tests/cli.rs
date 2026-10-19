@@ -135,3 +135,40 @@ fn invalid_arguments_and_missing_files_return_operational_errors() {
         assert!(!output.stderr.is_empty());
     }
 }
+
+#[test]
+fn evaluation_repl_handles_literals_precedence_and_associativity() {
+    let output = run(
+        &["--evaluate"],
+        "42\n3.5\n\"banana\"\ntrue\nfalse\nnil\n1 + 2 * 3\n(1 + 2) * 3\n10 - 3 - 2\n-8 / 2\n7 / 2\n\"ba\" + \"nana\"\n!nil\n2 < 3\n2 == 2\n2 != \"2\"\n",
+    );
+    assert!(output.status.success());
+    assert!(output.stderr.is_empty());
+    assert_eq!(output.stdout, b"> 42\n> 3.5\n> banana\n> true\n> false\n> nil\n> 7\n> 9\n> 5\n> -4\n> 3.5\n> banana\n> true\n> true\n> true\n> true\n> ");
+}
+
+#[test]
+fn evaluation_repl_recovers_after_runtime_errors() {
+    let output = run(&["--evaluate"], "1 + true\n1 / 0\n8 / -0\n6 * 7\n");
+    assert!(output.status.success());
+    assert_eq!(output.stdout, b"> > > > 42\n> ");
+    let errors = String::from_utf8(output.stderr).unwrap();
+    assert!(errors.contains("Incompatible operand types."));
+    assert_eq!(errors.matches("Division by zero.").count(), 2);
+}
+
+#[test]
+fn evaluation_files_print_values_and_use_exit_70_for_runtime_errors() {
+    let path = std::env::temp_dir().join(format!("cmsc124-evaluation-{}.csl", std::process::id()));
+    std::fs::write(&path, "1 + 2 * 3; (1 + 2) * 3; 7 / 2;").unwrap();
+    let output = run(&["--evaluate", path.to_str().unwrap()], "");
+    assert!(output.status.success());
+    assert_eq!(output.stdout, b"7\n9\n3.5\n");
+    assert!(output.stderr.is_empty());
+    std::fs::write(&path, "1 / 0").unwrap();
+    let output = run(&["--evaluate", path.to_str().unwrap()], "");
+    std::fs::remove_file(path).unwrap();
+    assert_eq!(output.status.code(), Some(70));
+    assert!(output.stdout.is_empty());
+    assert_eq!(output.stderr, b"[line 1] Runtime error at '/': Division by zero.\n");
+}
