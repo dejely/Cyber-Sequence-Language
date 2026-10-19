@@ -3,7 +3,7 @@ use std::io::{self, Write};
 use crate::parser::Parser;
 use crate::scanner::Scanner;
 
-pub fn run_prompt() -> io::Result<()> {
+pub fn run_prompt(evaluate: bool) -> io::Result<()> {
     loop {
         print!("> ");
         io::stdout().flush()?;
@@ -19,7 +19,16 @@ pub fn run_prompt() -> io::Result<()> {
             .scan_tokens()
             .and_then(|tokens| Parser::new(tokens).parse());
         match result {
-            Ok(expression) => println!("{expression}"),
+            Ok(expression) => {
+                if evaluate {
+                    match crate::evaluator::evaluate(&expression) {
+                        Ok(value) => println!("{value}"),
+                        Err(message) => eprintln!("{message}"),
+                    }
+                } else {
+                    println!("{expression}");
+                }
+            }
             Err(message) => eprintln!("{message}"),
         }
     }

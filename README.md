@@ -1,8 +1,8 @@
 # Cyber Sequence Language (CSL)
 
-This repository implements a scanner and a recursive descent expression parser.
-The parser builds and prints an abstract syntax tree (AST); it does not evaluate
-expressions. Token purposes below describe intended language semantics.
+This repository implements a scanner, a recursive descent expression parser,
+and a tree-walking evaluator. The parser builds an abstract syntax tree (AST);
+the evaluator computes its runtime value. Token purposes below describe intended language semantics.
 Declarations, statements, and CSL operations are not parsed or executed yet.
 
 ## Running the interpreter
@@ -78,8 +78,8 @@ reports both errors:
 
 Identifiers, assignment, unary `+`, `and`/`or`, calls, arrays, declarations,
 and CSL rules remain outside this expression grammar even when their tokens
-are recognized. Chained comparisons are parsed left to right; no evaluation or
-type checking is performed. The scanner's existing numeric and raw-string
+are recognized. Chained comparisons are parsed left to right; the evaluator
+checks operand types at runtime. The scanner's existing numeric and raw-string
 rules still apply: exponent syntax is unsupported, oversized numbers are
 rejected, and large or small values may print in scientific notation. AST string
 output preserves embedded newlines and backslashes without display escaping;
@@ -167,7 +167,7 @@ must be scanned from files because the REPL does not accumulate input lines.
 Clean file scans or parses and normal REPL exit use code 0. Lexically or
 syntactically rejected files use 65, with diagnostics on stderr and no stdout.
 Missing/unreadable input files or invalid arguments use code 1 through Rust's error return.
-Runtime exit 70 is reserved for later work and is not implemented.
+Evaluation file runtime errors use exit 70; the evaluation REPL continues after errors.
 
 ## File extension
 
@@ -440,22 +440,36 @@ whole file parses successfully; the REPL prints one AST per successful entry.
 ### Values and types
 
 CSL is intended to be dynamically typed. Rust's static types describe the host
-implementation, not a CSL runtime. Scanner numbers are `f64` and string literals
-are Rust strings; runtime values and type rules are deferred to Lab 3.
+implementation, not a CSL runtime. Runtime values use the Rust enum `Value`: `Number(f64)`, `String(String)`,
+`Boolean(bool)`, and `Nil`. Enum matching checks operand types explicitly;
+Rust owns and frees string contents automatically. Numbers retain the scanner's
+floating-point representation and rounding behavior.
 
 ### Value printing
 
-Runtime value printing is deferred to Lab 3. Token display is defined above and
-must not be confused with evaluating `print`.
+Use `./run --evaluate file.csl` to evaluate semicolon-separated expressions,
+or `./run --evaluate` for the evaluation REPL. `--parse` and the default REPL
+continue to print ASTs. Runtime numbers print without unnecessary `.0`, strings
+without quotes, booleans as `true` or `false`, and nil as `nil`. The `print`
+statement is not implemented.
 
 ### Truthiness
 
-Deferred to Lab 3; no condition evaluation is implemented.
+Only `false` and `nil` are falsey; all other values are truthy. Unary `!`
+negates truthiness. Conditional statements are not implemented.
 
 ### Operator semantics
 
-Deferred to Lab 3, including operand compatibility, string addition, mixed types,
-equality rules, and division by zero. Operators currently produce tokens only.
+The evaluator recursively walks expressions. Arithmetic and ordering require
+numbers; `+` also concatenates two strings. Mixed operands are rejected without
+coercion. Equality compares matching value variants; different variants are
+unequal. Division by zero and non-finite arithmetic results are runtime errors.
+File runtime errors exit with code 70; scanning and parsing errors use 65.
+Earlier expressions may already have printed when a runtime error occurs.
+The evaluation REPL reports an error and continues with the next line.
+
+For example, `1 + 2 * 3` evaluates to `7`, `(1 + 2) * 3` to `9`,
+`10 - 3 - 2` to `5`, and `7 / 2` to `3.5`.
 
 ### Scope and bindings
 
@@ -508,8 +522,8 @@ and escaped token records are now implemented.
 
 The Lab 1 scope is the scanner, diagnostics, tests, and documentation. Lab 2 adds
 expression parsing, operator precedence, AST printing, and parser diagnostics.
-Runtime typing, statements, rule evaluation, and RFID/CAD integration remain
-future work. Recognizing `watch` or `inspect` does not implement monitoring or
+Expression runtime values and evaluation are implemented. Statements, CSL rule
+evaluation, and RFID/CAD integration remain future work. Recognizing `watch` or `inspect` does not implement monitoring or
 inspection.
 
 ## File Structure
@@ -518,6 +532,8 @@ inspection.
 | ---------------- | ------------------------------------------------------------------------- |
 | `src/token.rs`   | Defines `TokenType`, `Literal`, and `Token`                               |
 | `src/scanner.rs` | Reads the raw source code character by character and turns it into tokens |
+| `src/value.rs` | Defines runtime values, truthiness, and value printing |
+| `src/evaluator.rs` | Evaluates expression trees and reports runtime errors |
 | `src/expr.rs` | Defines expression AST nodes and their printed representation |
 | `src/parser.rs` | Parses expressions and recovers at file-expression boundaries |
 | `src/repl.rs` | Reads and parses one expression per input line |
