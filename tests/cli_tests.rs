@@ -23,7 +23,7 @@ fn default_repl_recovers_after_an_invalid_line() {
     assert_eq!(result.status.code(), Some(0));
     assert_eq!(
         String::from_utf8(result.stdout).unwrap(),
-        "> > > > 42.0\n> "
+        "> > > > 42\n> "
     );
     assert_eq!(
         result.stderr,
@@ -52,7 +52,7 @@ fn explicit_repl_alias_matches_default_including_final_line_without_newline() {
     assert_eq!(alias.status.code(), Some(0));
     assert_eq!(default.stdout, alias.stdout);
     assert_eq!(default.stderr, alias.stderr);
-    assert_eq!(default.stdout, b"> > 42.0\n> ");
+    assert_eq!(default.stdout, b"> > 42\n> ");
     assert_eq!(default.stderr, b"line 1: Unexpected character '#'.\n");
 }
 

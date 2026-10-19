@@ -75,7 +75,7 @@ fn empty_file_is_a_static_error() {
 
 #[test]
 fn every_repl_entrypoint_continues_after_parser_and_scanner_errors() {
-    for args in [vec![], vec!["--repl"], vec!["--parse"]] {
+    for args in [vec!["--parse"]] {
         let output = run(&args, "1 +\n#\n(2 + 3) * 4\nnil;\n");
         assert_eq!(output.status.code(), Some(0));
         assert_eq!(
@@ -90,8 +90,18 @@ fn every_repl_entrypoint_continues_after_parser_and_scanner_errors() {
 }
 
 #[test]
+fn default_and_explicit_repl_print_values_and_recover() {
+    for args in [vec![], vec!["--repl"], vec!["--eval"]] {
+        let output = run(&args, "1 +\n#\n(2 + 3) * 4\nnil;\n");
+        assert_eq!(output.status.code(), Some(0));
+        assert_eq!(output.stdout, b"> > > 20\n> nil\n> ");
+        assert_eq!(output.stderr, b"[line 1] Error at end: Expect expression.\nline 1: Unexpected character '#'.\n");
+    }
+}
+
+#[test]
 fn repl_rejects_trailing_input_and_recovers_on_the_next_line() {
-    let output = run(&["--repl"], "1 2\n42\n");
+    let output = run(&["--parse"], "1 2\n42\n");
     assert_eq!(output.status.code(), Some(0));
     assert_eq!(output.stdout, b"> > 42.0\n> ");
     assert_eq!(
@@ -139,7 +149,7 @@ fn invalid_arguments_and_missing_files_return_operational_errors() {
 #[test]
 fn evaluation_repl_handles_literals_precedence_and_associativity() {
     let output = run(
-        &["--evaluate"],
+        &["--eval"],
         "42\n3.5\n\"banana\"\ntrue\nfalse\nnil\n1 + 2 * 3\n(1 + 2) * 3\n10 - 3 - 2\n-8 / 2\n7 / 2\n\"ba\" + \"nana\"\n!nil\n2 < 3\n2 == 2\n2 != \"2\"\n",
     );
     assert!(output.status.success());
@@ -149,7 +159,7 @@ fn evaluation_repl_handles_literals_precedence_and_associativity() {
 
 #[test]
 fn evaluation_repl_recovers_after_runtime_errors() {
-    let output = run(&["--evaluate"], "1 + true\n1 / 0\n8 / -0\n6 * 7\n");
+    let output = run(&["--eval"], "1 + true\n1 / 0\n8 / -0\n6 * 7\n");
     assert!(output.status.success());
     assert_eq!(output.stdout, b"> > > > 42\n> ");
     let errors = String::from_utf8(output.stderr).unwrap();
@@ -161,12 +171,12 @@ fn evaluation_repl_recovers_after_runtime_errors() {
 fn evaluation_files_print_values_and_use_exit_70_for_runtime_errors() {
     let path = std::env::temp_dir().join(format!("cmsc124-evaluation-{}.csl", std::process::id()));
     std::fs::write(&path, "1 + 2 * 3; (1 + 2) * 3; 7 / 2;").unwrap();
-    let output = run(&["--evaluate", path.to_str().unwrap()], "");
+    let output = run(&["--eval", path.to_str().unwrap()], "");
     assert!(output.status.success());
     assert_eq!(output.stdout, b"7\n9\n3.5\n");
     assert!(output.stderr.is_empty());
     std::fs::write(&path, "1 / 0").unwrap();
-    let output = run(&["--evaluate", path.to_str().unwrap()], "");
+    let output = run(&["--eval", path.to_str().unwrap()], "");
     std::fs::remove_file(path).unwrap();
     assert_eq!(output.status.code(), Some(70));
     assert!(output.stdout.is_empty());
