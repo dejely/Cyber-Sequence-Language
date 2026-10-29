@@ -4,3 +4,7 @@
 !"hello"; // expect: false
 !0; // expect: false
 !!""; // expect: true
+!!0; // expect: true
+!-1; // expect: false
+!!nil; // expect: false
+!(1 < 2); // expect: false

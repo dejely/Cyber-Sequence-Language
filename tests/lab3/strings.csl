@@ -2,3 +2,6 @@
 "" + "hello"; // expect: hello
 "ab" == "ab"; // expect: true
 "ab" != "ac"; // expect: true
+"1" + "2"; // expect: 12
+"say " + "hi" + "!"; // expect: say hi!
+"hi" + " " + "there"; // expect: hi there
