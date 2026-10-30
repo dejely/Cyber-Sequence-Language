@@ -1,2 +1,7 @@
 ((3 + 4) * 2 - 5) / 3 == 3; // expect: true
 1 + 2 * 3 > 6 == !nil; // expect: true
+// (5 - 2) * 4 / 2 = 6; 6 + -2 = 4; 4 >= 4 is true; !false is true.
+(5 - (3 - 1)) * 4 / 2 + -(6 / 3) >= 4 == !false; // expect: true
+// (5 * 3 - 2.5) * 2 - 1 = 24.
+((2 + 3) * (4 - 1) - 10 / 4) * 2 + -1; // expect: 24
+"total: " + "24" == "total: 24"; // expect: true

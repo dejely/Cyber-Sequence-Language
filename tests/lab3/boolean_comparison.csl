@@ -1,0 +1,1 @@
+true > false; // expect runtime error: Operands must be numbers.

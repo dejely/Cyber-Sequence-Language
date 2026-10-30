@@ -1,0 +1,8 @@
+// Integral results drop ".0"; other values use Rust's shortest round-trip form.
+2 + 3; // expect: 5
+1.50; // expect: 1.5
+100 / 8; // expect: 12.5
+1 / 4; // expect: 0.25
+0.1 + 0.2; // expect: 0.30000000000000004
+1000000 * 1000000; // expect: 1000000000000
+-0; // expect: -0

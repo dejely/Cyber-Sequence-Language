@@ -1,0 +1,3 @@
+// A parse error rejects the whole file with 65 before anything is evaluated.
+1 + 1;
+(2 * ; // expect error: Expect expression.

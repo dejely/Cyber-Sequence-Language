@@ -1,0 +1,4 @@
+// Values before the failing expression still print; evaluation stops there.
+1 + 1; // expect: 2
+"ok"; // expect: ok
+10 / (5 - 5); // expect runtime error: Division by zero.

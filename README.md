@@ -106,7 +106,7 @@ and is ignored locally. Lab 0 and Lab 1 retain their sidecar expectations.
 Lab 2 uses inline `// expect:` and `// expect error:` annotations. Lab 3 adds
 `// expect runtime error:` checks for runtime failures. Rust tests also
 check exact diagnostics, suppression of partial output, CLI arguments, and
-REPL continuation. CI runs all three laboratory suites and `cargo test`.
+REPL continuation. CI runs all four laboratory suites and `cargo test`.
 
 - Jemarco Briz ([Jmbriz123](https://github.com/Jmbriz123))
 - Dejel Cyrus De Asis ([dejely](https://github.com/dejely))
@@ -118,9 +118,9 @@ monitoring and response sequences: watch an event source, group or count events
 within a time window, require a capability, then describe an alert or inspection.
 Its intended syntax combines explicit punctuation with domain words such as
 `watch`, `source`, and `sequence`. This CMSC 124 prototype currently implements
-lexical scanning and expression parsing. Lab 1 covers the scanner, diagnostics,
-tests, and lexical specification; Lab 2 adds expression ASTs and printing.
-Expression evaluation is implemented. Event
+lexical scanning, expression parsing, and expression evaluation. Lab 1 covers the scanner, diagnostics,
+tests, and lexical specification; Lab 2 adds expression ASTs and printing;
+Lab 3 adds the tree-walking evaluator and runtime errors. Event
 adapters and optional RFID credential verification remain future extensions,
 not dependencies of the three-month language prototype.
 
@@ -440,40 +440,115 @@ successful entry.
 
 ## Semantics
 
-### Values and types
+These decisions are frozen for Lab 3. The evaluator in `src/evaluator.rs`,
+the value type in `src/value.rs`, and the fixtures in `tests/lab3/` must agree
+with every rule below.
 
-CSL is intended to be dynamically typed. Rust's static types describe the host
-implementation, not a CSL runtime. Runtime values use the Rust enum `Value`: `Number(f64)`, `String(String)`,
-`Boolean(bool)`, and `Nil`. Enum matching checks operand types explicitly;
-Rust owns and frees string contents automatically. Numbers retain the scanner's
-floating-point representation and rounding behavior.
+### Value representation
+
+CSL is dynamically typed, but every Rust variable has one static type. Runtime
+values therefore use a tagged union, the Rust enum `Value` in `src/value.rs`:
+
+```rust
+pub enum Value { Number(f64), String(String), Boolean(bool), Nil }
+```
+
+- **Uniform storage:** every evaluator function returns `Value`, whatever the
+  CSL type turns out to be.
+- **Runtime interrogation:** `match` reads the tag, and the compiler rejects a
+  match that forgets a variant.
+- **Conversion:** a host `f64` goes in with `Value::Number(x)` and comes out by
+  matching `Value::Number(x)`; arithmetic happens on the host `f64`.
+
+We rejected `Box<dyn Any>` with downcasting. It rebuilds Java's `Object`
+approach and loses exhaustiveness checking. Strings are owned `String`s compared
+by content, so `"ab" == "ab"` is `true`; there is no reference identity to get
+wrong.
 
 ### Value printing
 
-Use `./run --eval file.csl` to evaluate semicolon-separated expressions,
-or `./run --eval` for the evaluation REPL. `--parse` prints ASTs instead.
-Runtime numbers print without unnecessary `.0`, strings
-without quotes, booleans as `true` or `false`, and nil as `nil`. The `print`
-statement is not implemented.
+`./run --eval <file>` evaluates semicolon-separated expressions and prints one
+value per line. The REPL prints with the same `Display` implementation, so the
+two modes cannot format differently. `--parse` still prints ASTs.
+
+| Value | Prints as | Example |
+| --- | --- | --- |
+| Integral number | No trailing `.0` | `2 + 3` → `5` |
+| Fractional number | Shortest round-trip form | `7 / 2` → `3.5`, `0.1 + 0.2` → `0.30000000000000004` |
+| Negative zero | `-0` (IEEE 754 sign kept) | `-0` → `-0` |
+| String | Contents, no quotes | `"hi" + " there"` → `hi there` |
+| Boolean | `true` / `false` | `1 < 2` → `true` |
+| Nil | `nil` | `nil` → `nil` |
+
+Large integral numbers print every digit (`1000000 * 1000000` →
+`1000000000000`); there is no exponent notation. The `print` statement is not
+implemented yet.
 
 ### Truthiness
 
-Only `false` and `nil` are falsey; all other values are truthy. Unary `!`
-negates truthiness. Conditional statements are not implemented.
+`false` and `nil` are falsey. **Every other value is truthy**, including `0`,
+`-1`, and the empty string `""`. This is the Lox rule. It needs one check and
+no per-type exceptions, so `!0` is `false` and `!!""` is `true`. The rule
+lives in one function, `Value::is_truthy`, which Lab 5 `if` and `while` will
+reuse. `tests/lab3/truthiness.csl` is the executable form of this rule.
 
-### Operator semantics
+### Operators
 
-The evaluator recursively walks expressions in post-order. Binary operands are
-evaluated from left to right. Arithmetic and ordering require numbers; `+` also
-concatenates two strings. Mixed operands are rejected without coercion. Equality
-compares matching value variants; different variants are unequal. Division by
-zero and non-finite arithmetic results are runtime errors.
-File runtime errors exit with code 70; scanning and parsing errors use 65.
-Earlier expressions may already have printed when a runtime error occurs.
-The evaluation REPL reports an error and continues with the next line.
+| Operator | Operands | Result | Otherwise |
+| --- | --- | --- | --- |
+| `-x` | number | negated number | `Operand must be a number.` |
+| `!x` | any value | `!is_truthy(x)` | never fails |
+| `+` | two numbers / two strings | sum / concatenation | `Operands must be two numbers or two strings.` |
+| `-` `*` `/` | two numbers | number | `Operands must be numbers.` |
+| `<` `<=` `>` `>=` | two numbers | boolean | `Operands must be numbers.` |
+| `==` `!=` | any pair | boolean | never fails |
 
-For example, `1 + 2 * 3` evaluates to `7`, `(1 + 2) * 3` to `9`,
-`10 - 3 - 2` to `5`, and `7 / 2` to `3.5`.
+- **`+` with strings:** two strings concatenate (`"a" + "b"` → `ab`). Mixing
+  a string with anything else is a runtime error (`"a" + 1`). There is no
+  implicit conversion, so a typo does not silently produce `"a1"`.
+- **Equality:** values of different variants are unequal, never an error.
+  `1 == "1"`, `0 == false`, and `nil == false` are all `false`; `1 == 1.0`
+  and `0 == -0` are `true`.
+- **Comparison** only orders numbers. Strings and booleans cannot be compared
+  with `<`.
+- **Evaluation order:** operands evaluate **left to right**, and a node
+  evaluates its children before itself (post-order). This is invisible while
+  expressions have no side effects, but it is fixed now so that
+  `print f() + g();` in Lab 5 always runs `f` first.
+
+### Division by zero and overflow
+
+Dividing by zero (`1 / 0`, `0 / 0`) is a **runtime error**:
+`Division by zero.`, exit 70. IEEE 754 would give `Infinity` or `NaN`. We
+reject that because a script that divides by zero almost always has a bug, and
+CSL rule counts and rates should fail loudly rather than carry `Infinity`
+forward. For the same reason, an arithmetic result that overflows to infinity
+(`1e308 * 10` written out in full) reports `Numeric result is not finite.`
+Every number CSL prints is finite, and `NaN` can never be produced.
+
+### Runtime errors and exit codes
+
+Runtime errors are reported on stderr with the operator's line and lexeme,
+using the token stored on each AST node:
+
+```text
+[line 1] Runtime error at '/': Division by zero.
+```
+
+The evaluator returns `Result<Value, RuntimeError>`, and `?` unwinds to one
+place. File mode prints the error and exits **70**. The REPL prints it and
+shows the next prompt. Values printed before the failing expression stay
+printed.
+
+| Outcome | Exit code |
+| --- | --- |
+| File evaluated successfully | 0 |
+| Scanner or parser rejected the file (nothing evaluated, stdout empty) | 65 |
+| File parsed, then hit a runtime error | 70 |
+| Missing file or bad arguments | 1 |
+
+Interpreter bugs aside, no CSL input should make the host panic or print a
+Rust stack trace.
 
 ### Scope and bindings
 
@@ -540,7 +615,7 @@ inspection.
 | `src/evaluator.rs` | Evaluates expression trees and reports runtime errors |
 | `src/expr.rs` | Defines expression AST nodes and their printed representation |
 | `src/parser.rs` | Parses expressions and recovers at file-expression boundaries |
-| `src/repl.rs` | Reads and parses one expression per input line |
+| `src/repl.rs` | Reads one expression per line and prints its value (or AST with `--parse`) |
 | `src/main.rs` | Dispatches the file parser, tokenizer, REPL, and Lab 0 command |
 | `tests/lab2/` | Parser fixtures with inline AST and diagnostic expectations |
 | `tests/lab3/` | Evaluator fixtures with inline value and error expectations |

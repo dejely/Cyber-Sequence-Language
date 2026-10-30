@@ -1,0 +1,10 @@
+// Each grouped line is paired with the ungrouped value it changes.
+1 + 2 * 3; // expect: 7
+(1 + 2) * 3; // expect: 9
+10 - 3 - 2; // expect: 5
+10 - (3 - 2); // expect: 9
+-2 + 3; // expect: 1
+-(2 + 3); // expect: -5
+(2 + 2) / (1 + 1); // expect: 2
+((((7)))); // expect: 7
+!(1 == 2); // expect: true
