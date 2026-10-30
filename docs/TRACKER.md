@@ -1,8 +1,8 @@
 # CMSC 124 Progress Tracker
 
-**Last repository verification:** 2026-10-20
+**Last repository verification:** 2026-11-01
 
-**Current milestone:** Lab 3 — evaluator through Week 2
+**Current milestone:** Lab 3 — evaluator ready for defense
 
 This tracker records what the repository implements today. A checked item has
 been verified against the source and the listed test command. An unchecked item
@@ -66,8 +66,9 @@ before marking implementation work complete.
 - [x] Build an expression abstract syntax tree.
 - [ ] Parse declarations, blocks, and statements.
 - [ ] Resolve names and scopes.
-- [ ] Evaluate expressions and execute statements.
-- [ ] Define runtime errors and their exit behavior.
+- [x] Evaluate expressions.
+- [ ] Execute statements.
+- [x] Define runtime errors and their exit behavior.
 
 ### Verification recorded on 2026-10-11
 
@@ -130,7 +131,14 @@ dead-code warnings are resolved. The release build completed without warnings.
 
 - [x] Distinguish static errors (65) from runtime errors (70) in file mode.
 - [x] Continue the REPL after a runtime error.
-- [ ] Add Lab 3 to CI and verify all four laboratory suites there.
+- [x] Use one `RuntimeError` type carrying the operator token, with shared
+  number-operand checks.
+- [x] Add one-case fixtures for each runtime error class, overflow, output
+  before a runtime error, and scanner/parser exit 65.
+- [x] Add Lab 3 to CI (`.github/workflows/test.yml`) beside Labs 0–2.
+- [x] Record value representation, truthiness, printing, `+` on strings,
+  evaluation order, and division by zero in the README Semantics section.
+- [ ] Confirm the workflow is green on the defended commit.
 - [ ] Prepare individual reflection and peer assessment after the defense.
 
 ### Local verification on 2026-10-20
@@ -139,6 +147,13 @@ dead-code warnings are resolved. The release build completed without warnings.
 - [x] `cargo test` — 19 integration tests passed.
 - [x] Course harness: Lab 0 (1/1), Lab 1 (20/20), Lab 2 (19/19),
   and Lab 3 (13/13) passed locally.
+
+### Local verification on 2026-11-01
+
+- [x] `./build.sh` with no warnings.
+- [x] `cargo test` — 19 integration tests passed.
+- [x] Course harness: Lab 0 (1/1), Lab 1 (20/20), Lab 2 (19/19),
+  and Lab 3 (25/25) passed locally.
 
 ## Update procedure
 
