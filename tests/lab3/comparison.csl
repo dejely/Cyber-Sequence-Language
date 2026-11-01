@@ -4,3 +4,9 @@
 4 > 3; // expect: true
 3 > 3; // expect: false
 3 >= 3; // expect: true
+-1 < 0; // expect: true
+2.5 <= 2.4; // expect: false
+2.4 <= 2.5; // expect: true
+2.5 >= 2.5; // expect: true
+2.4 > 2.5; // expect: false
+1 < 2 == true; // expect: true
