@@ -28,7 +28,7 @@ fn explicit_and_positional_file_commands_print_only_the_ast() {
     ] {
         let output = run(&args, "");
         assert_eq!(output.status.code(), Some(0));
-        assert_eq!(output.stdout, b"(- (+ 1.0 (* 2.0 3.0)) 4.0)\n");
+        assert_eq!(output.stdout, b"1.0 2.0 3.0 * + 4.0 -\n");
         assert!(output.stderr.is_empty());
     }
 }
@@ -80,7 +80,7 @@ fn every_repl_entrypoint_continues_after_parser_and_scanner_errors() {
         assert_eq!(output.status.code(), Some(0));
         assert_eq!(
             output.stdout,
-            b"> > > (* (group (+ 2.0 3.0)) 4.0)\n> nil\n> "
+            b"> > > 2.0 3.0 + 4.0 *\n> nil\n> "
         );
         assert_eq!(
             output.stderr,

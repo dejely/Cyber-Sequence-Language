@@ -1,0 +1,46 @@
+// CSL expression walkthrough.
+// Run from the repository root:
+//   ./build.sh
+//   ./run --eval learn.csl
+// Inspect the syntax tree with: ./run --parse learn.csl
+// Inspect the tokens with:     ./run --tokenize learn.csl
+//
+// Each expression ends with a semicolon. The CLI prints its result.
+// Comments beginning with // are ignored.
+
+// Multiplication happens before addition; parentheses change the order.
+1 + 2 * 3;                  // expect: 7
+(1 + 2) * 3;                // expect: 9
+
+// Subtraction and division work left to right. Numbers allow decimals.
+10 - 3 - 2;                 // expect: 5
+7 / 2;                      // expect: 3.5
+-5 + 2;                     // expect: -3
+
+// The + operator joins two strings or adds two numbers.
+"Hello, " + "CSL!";         // expect: Hello, CSL!
+"banana" == "banana";       // expect: true
+
+// Comparisons and equality produce boolean values.
+10 >= 7;                    // expect: true
+3 < 1;                      // expect: false
+5 == 5;                     // expect: true
+5 != "5";                   // expect: true
+
+// ! negates truthiness. Only false and nil are falsy; even 0 is truthy.
+!true;                      // expect: false
+!nil;                       // expect: true
+!0;                         // expect: false
+nil;                        // expect: nil
+
+// Expressions can span lines, but semicolons separate them.
+(
+    100 - 20
+) / 4;                      // expect: 20
+
+// Not implemented yet: variables, print statements, loops, functions,
+// and monitoring commands such as watch or alert.
+// Try these individually in ./run to see runtime errors:
+//   1 / 0
+//   "score: " + 5
+// The REPL reports the error and lets you enter another expression.

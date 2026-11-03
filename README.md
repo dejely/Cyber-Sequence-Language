@@ -23,7 +23,7 @@ greeting. Positional `.src` files use that compatibility behavior; an explicit
 For example, `./run --parse tests/lab2/precedence.csl` prints:
 
 ```text
-(- (+ 1.0 (* 2.0 3.0)) 4.0)
+1.0 2.0 3.0 * + 4.0 -
 ```
 
 Successful files exit 0. Scanning or parsing errors go to stderr and exit 65,
@@ -51,9 +51,10 @@ repl       → expression ";"? EOF
 ```
 
 Binary operators associate to the left: `10 - 3 - 2` prints
-`(- (- 10.0 3.0) 2.0)`. Unary operators nest to the right: `--10` prints
-`(- (- 10.0))`. Parentheses produce an explicit `group` node, so
-`(1 + 2) * 3` prints `(* (group (+ 1.0 2.0)) 3.0)`. Ordinary integral numbers
+`10.0 3.0 - 2.0 -`. Unary operators nest to the right: `--10` prints
+`10.0 - -`. Parentheses produce an explicit `group` node in the AST, but the printer omits
+the group marker because postfix order already preserves grouping. Thus
+`(1 + 2) * 3` prints `1.0 2.0 + 3.0 *`. Ordinary integral numbers
 print with `.0`, strings print their contents without quotes, booleans print `true` or
 `false`, and `nil` prints `nil`. These are tree representations, not results:
 even `1 / 0` is a valid expression to parse.
@@ -433,7 +434,7 @@ the AST nodes in `src/expr.rs`. Statement and CSL rule grammars remain deferred.
 
 ## Parse output format
 
-The AST printer uses parenthesized prefix notation, as documented in the
+The AST printer uses postfix notation (operands before operators), as documented in the
 [expression grammar](#grammar). `--parse` files print one AST per expression
 after the whole file parses successfully; the `--parse` REPL prints one AST per
 successful entry.
