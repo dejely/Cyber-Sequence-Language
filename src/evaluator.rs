@@ -3,6 +3,7 @@
 use std::fmt;
 
 use crate::expr::Expr;
+use crate::stmt::Stmt;
 use crate::token::{Literal, Token, TokenType};
 use crate::value::Value;
 
@@ -64,6 +65,17 @@ pub fn evaluate(expression: &Expr) -> Result<Value, RuntimeError> {
             binary(operator, left, right)
         }
     }
+}
+
+/// Both statement forms use the same expression evaluator and error propagation.
+pub fn execute(statement: &Stmt) -> Result<(), RuntimeError> {
+    match statement {
+        Stmt::Print(expression) => println!("{}", evaluate(expression)?),
+        Stmt::Expression(expression) => {
+            evaluate(expression)?;
+        }
+    }
+    Ok(())
 }
 
 fn binary(operator: &Token, left: Value, right: Value) -> Result<Value, RuntimeError> {

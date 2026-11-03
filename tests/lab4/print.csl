@@ -1,0 +1,8 @@
+print "Hello!"; // expect: Hello!
+print 2 + 3 * 4; // expect: 14
+print (2 + 3) * 4; // expect: 20
+print "ba" + "nana"; // expect: banana
+print !nil; // expect: true
+print nil; // expect: nil
+2 + 3;
+print 7 / 2; // expect: 3.5

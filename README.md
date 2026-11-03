@@ -1,24 +1,25 @@
 # Cyber Sequence Language (CSL)
 
-This repository implements a scanner, a recursive descent expression parser,
-and a tree-walking evaluator. The parser builds an abstract syntax tree (AST);
-the evaluator computes its runtime value. Token purposes below describe intended language semantics.
-Declarations, statements, and CSL operations are not parsed or executed yet.
+This repository implements a scanner, a recursive descent parser, and a
+tree-walking evaluator. Lab 4 Week 1 adds print and expression statements.
+Declarations, variables, blocks, and CSL monitoring operations remain deferred.
 
 ## Running the interpreter
 
 Build with `./build.sh`, then use `./run` or `./run --repl` to start the
-evaluation REPL. Enter one expression per line; it prints the computed value
-and continues after scanning, parsing, or runtime errors. `./run --parse`
+program REPL. Enter one expression or `print expression;` per line; expressions
+echo their values, and print statements print once. It continues after scanning,
+parsing, or runtime errors. `./run --parse`
 starts an AST-printing REPL. Ctrl-D ends the session on
 Unix. Each entered line starts at source line 1, and the `> ` prompt is printed
 before each read, including the final read that reaches EOF.
 
-Use `./run --parse <file>` to parse a file, or pass a `.csl` filename directly.
-The original `./run tests/lab0/hello.src` invocation still prints the Lab 0
-greeting. Positional `.src` files use that compatibility behavior; an explicit
-`--parse` parses files regardless of their extension. Use
-`./run --tokenize <file>` for the unchanged Lab 1 token output.
+Use `./run <file>` to execute a program: statements run in order, and only
+`print` statements produce output. Every file statement requires a semicolon.
+The Lab 0 `hello.src` fixture is now a real CSL print program, with the same
+expected greeting. File extensions do not change execution behavior. Use
+`./run --parse <file>` for expression ASTs, `./run --eval <file>` for expression
+values, or `./run --tokenize <file>` for the unchanged Lab 1 token output.
 
 For example, `./run --parse tests/lab2/precedence.csl` prints:
 
@@ -27,9 +28,22 @@ For example, `./run --parse tests/lab2/precedence.csl` prints:
 ```
 
 Successful files exit 0. Scanning or parsing errors go to stderr and exit 65,
-with no ASTs or tokens printed to stdout. Argument and file-access errors exit 1.
+with no program output, ASTs, or tokens printed to stdout. Runtime errors exit 70;
+output from earlier statements remains visible. Argument and file-access errors exit 1.
 The REPL reports errors on stderr and stays open; reaching EOF exits 0 even if
 an earlier entry failed.
+
+For the Week 1 statement example, run `./run examples/week1.csl`:
+
+```csl
+print "Hello!";
+print 2 + 3;
+2 + 3;
+```
+
+This prints `Hello!` and `5` on separate lines. The last statement evaluates
+without printing. `Stmt::Print` and `Stmt::Expression` both reuse the existing
+expression evaluator; the statement kind controls whether its value is printed.
 
 ## Grammar
 
@@ -46,8 +60,14 @@ factor     → unary ( ( "/" | "*" ) unary )*
 unary      → ( "!" | "-" ) unary | primary
 primary    → NUMBER | STRING | "true" | "false" | "nil" | "(" expression ")"
 
-file       → expression ( ";" expression )* ";"? EOF
-repl       → expression ";"? EOF
+expressionFile → expression ( ";" expression )* ";"? EOF
+expressionRepl → expression ";"? EOF
+
+program     → statement* EOF
+statement   → printStmt | exprStmt
+printStmt   → "print" expression ";"
+exprStmt    → expression ";"
+programRepl → ( printStmt | expression ";"? ) EOF
 ```
 
 Binary operators associate to the left: `10 - 3 - 2` prints
@@ -59,13 +79,21 @@ print with `.0`, strings print their contents without quotes, booleans print `tr
 `false`, and `nil` prints `nil`. These are tree representations, not results:
 even `1 / 0` is a valid expression to parse.
 
-Files may contain several expressions separated by semicolons, with an optional
+In `--parse` and `--eval` modes, files may contain several expressions separated
+by semicolons, with an optional
 final semicolon. Newlines remain whitespace, so a file expression may span
 lines. The REPL accepts one complete expression per entry, also with an optional
-final semicolon; it does not collect multiline expressions. Neither interface
-silently accepts trailing tokens. Empty or comment-only input is an error, as
+final semicolon; it does not collect multiline expressions. Print statements require
+a semicolon even in the default REPL. Neither interface
+silently accepts trailing tokens. Empty or comment-only input in expression modes is an error, as
 in the laboratory examples, and repeated semicolons create empty expressions
 that are also rejected.
+
+Programs may be empty or contain only comments; both execute without output.
+In script mode, expression-statement values are discarded but still evaluated,
+so `1 / 0;` reports a runtime error. Only `print` writes program output.
+All script statements are parsed before any execute; syntax errors prevent
+the entire program from running.
 
 After a file parsing error, the parser skips through the next semicolon and
 tries the following expression. It collects diagnostics in source order and
@@ -90,7 +118,7 @@ the parser runs.
 
 ## Tests
 
-Run the four laboratory suites after building:
+Run the five laboratory suites after building:
 
 ```sh
 ./build.sh
@@ -98,6 +126,7 @@ python3 run_tests.py tests/lab0
 python3 run_tests.py tests/lab1
 python3 run_tests.py tests/lab2
 python3 run_tests.py tests/lab3
+python3 run_tests.py tests/lab4
 cargo test
 ```
 
@@ -107,7 +136,9 @@ and is ignored locally. Lab 0 and Lab 1 retain their sidecar expectations.
 Lab 2 uses inline `// expect:` and `// expect error:` annotations. Lab 3 adds
 `// expect runtime error:` checks for runtime failures. Rust tests also
 check exact diagnostics, suppression of partial output, CLI arguments, and
-REPL continuation. CI runs all four laboratory suites and `cargo test`.
+REPL continuation. Lab 4 tests plain file execution, explicit output, discarded
+values, semicolon errors, and runtime failures. CI runs all five laboratory
+suites and `cargo test`.
 
 - Jemarco Briz ([Jmbriz123](https://github.com/Jmbriz123))
 - Dejel Cyrus De Asis ([dejely](https://github.com/dejely))
@@ -119,9 +150,10 @@ monitoring and response sequences: watch an event source, group or count events
 within a time window, require a capability, then describe an alert or inspection.
 Its intended syntax combines explicit punctuation with domain words such as
 `watch`, `source`, and `sequence`. This CMSC 124 prototype currently implements
-lexical scanning, expression parsing, and expression evaluation. Lab 1 covers the scanner, diagnostics,
+lexical scanning, expression parsing, expression evaluation, and basic statements. Lab 1 covers the scanner, diagnostics,
 tests, and lexical specification; Lab 2 adds expression ASTs and printing;
-Lab 3 adds the tree-walking evaluator and runtime errors. Event
+Lab 3 adds the tree-walking evaluator and runtime errors; Lab 4 Week 1 adds
+print and expression statements in programs. Event
 adapters and optional RFID credential verification remain future extensions,
 not dependencies of the three-month language prototype.
 
@@ -147,11 +179,11 @@ to build or run the interpreter.
 
 | Command | Current behavior |
 | --- | --- |
-| `./run` | Starts the evaluation REPL |
-| `./run --repl` | Explicit alias for the evaluation REPL |
+| `./run` | Starts the program REPL |
+| `./run --repl` | Explicit alias for the program REPL |
 | `./run --tokenize <file>` | Scans a UTF-8 source file and prints tokens |
-| `./run tests/lab0/hello.src` | Prints `Hello, JM & Dejel!` for Lab 0 compatibility |
-| `./run <file>` | Parses expressions; positional `.src` files retain the Lab 0 greeting |
+| `./run tests/lab0/hello.src` | Executes the CSL program that prints the Lab 0 greeting |
+| `./run <file>` | Executes statements; only explicit print statements produce output |
 | `./run --parse <file>` | Scans the file, parses expressions, and prints ASTs |
 | `./run --eval <file>` | Evaluates expressions and prints one value per line |
 
@@ -162,7 +194,8 @@ Example file invocation:
 ```
 
 The default REPL prints `> `, scans and parses one input line, and prints a value or diagnostics.
-Each line is independent, with line numbering starting at 1; `var x = 1;` is
+Each line starts at source line 1 and accepts one expression or print statement.
+Variables are not supported yet; `var x = 1;` is
 rejected by the expression grammar. A bad line such as `#` reports an error and returns to the
 prompt. End input with EOF (Ctrl-D on Unix-like terminals). Multiline strings
 must be scanned from files because the REPL does not accumulate input lines.
@@ -174,8 +207,8 @@ Evaluation file runtime errors use exit 70; the evaluation REPL continues after 
 
 ## File extension
 
-CSL source files use `.csl`, matching `tests/lab1/manifest.json`. The `.src`
-extension in `tests/lab0/manifest.json` is a preserved legacy-test exception.
+CSL source files use `.csl`, matching `tests/lab1/manifest.json`. The Lab 0
+fixture retains its `.src` filename, but contains ordinary CSL source.
 
 ## Lexical structure
 
@@ -187,7 +220,7 @@ All token categories are defined in [src/token.rs](src/token.rs); scanning is in
 ### Keywords
 
 The words below are recognized now. Their purposes describe intended semantics;
-none of these keywords currently executes statements or CSL operations.
+`print` executes a statement; other keywords remain reserved for future forms.
 
 | Lexeme   | Token Type | Purpose                           |
 | -------- | ---------- | --------------------------------- |
@@ -430,7 +463,8 @@ This output contract is frozen for Lab 1; format changes are recorded below.
 
 The [expression grammar](#grammar) is implemented in `src/parser.rs` and
 integrated through `src/main.rs`. It validates expression syntax and builds
-the AST nodes in `src/expr.rs`. Statement and CSL rule grammars remain deferred.
+the AST nodes in `src/expr.rs`. Script parsing builds print and expression
+statements in `src/stmt.rs`; CSL rule grammars remain deferred.
 
 ## Parse output format
 
@@ -482,8 +516,8 @@ two modes cannot format differently. `--parse` still prints ASTs.
 | Nil | `nil` | `nil` → `nil` |
 
 Large integral numbers print every digit (`1000000 * 1000000` →
-`1000000000000`); there is no exponent notation. The `print` statement is not
-implemented yet.
+`1000000000000`); there is no exponent notation. Script `print` statements
+use this same value formatting.
 
 ### Truthiness
 
@@ -571,12 +605,12 @@ Deferred to Lab 5. No native functions are callable. `inspect`, `isolate`, and
 | Condition | Diagnostic example | File exit code |
 | --- | --- | --- |
 | `./run --tokenize tests/lab1/coverage/categories.csl` | Prints tokens | Preserve |
-| `./run --repl` | Parses one expression per line; a bad line does not end the session | Implemented |
-| `./run` | Starts the evaluation REPL | Implemented |
-| `./run tests/lab0/hello.src` | Prints `Hello, JM & Dejel!` | Preserve legacy Lab 0 behavior |
+| `./run --repl` | Accepts one expression or print statement per line; errors return the prompt | Implemented |
+| `./run` | Starts the program REPL | Implemented |
+| `./run tests/lab0/hello.src` | Executes a CSL print statement | Same Lab 0 output |
 | Rust toolchain | `stable` in `rust-toolchain.toml` | **Step 8:** pin audited version `1.98.0` |
 
-CSL source uses `.csl`; the `.src` Lab 0 fixture remains a compatibility exception.
+CSL source uses `.csl`; the `.src` Lab 0 fixture is also interpreted as CSL.
 The default REPL satisfies the no-argument interface while keeping the
 earlier Lab 0 harness invocation working.
 
@@ -589,7 +623,7 @@ rejects it; it does not create a variable.
 
 * `{}` will delimit blocks, as in `{ print x; }`.
 * `[]` is reserved for arrays/indexing, as in `items[0]`.
-* `;` will terminate statements, as in `print x;`.
+* `;` terminates statements, as in `print 42;`.
 * `()` groups expressions such as `(1 + 2)`; calls such as `inspect(host)`
   remain planned.
 * Reserved words such as `if`, `else`, `for`, `fun`, `and`, and `var` are already
@@ -602,8 +636,9 @@ and escaped token records are now implemented.
 
 The Lab 1 scope is the scanner, diagnostics, tests, and documentation. Lab 2 adds
 expression parsing, operator precedence, AST printing, and parser diagnostics.
-Expression runtime values and evaluation are implemented. Statements, CSL rule
-evaluation, and RFID/CAD integration remain future work. Recognizing `watch` or `inspect` does not implement monitoring or
+Expression runtime values, evaluation, print statements, and expression
+statements are implemented. Variables, blocks, CSL rule evaluation, and
+RFID/CAD integration remain future work. Recognizing `watch` or `inspect` does not implement monitoring or
 inspection.
 
 ## File Structure
@@ -613,12 +648,14 @@ inspection.
 | `src/token.rs`   | Defines `TokenType`, `Literal`, and `Token`                               |
 | `src/scanner.rs` | Reads the raw source code character by character and turns it into tokens |
 | `src/value.rs` | Defines runtime values, truthiness, and value printing |
-| `src/evaluator.rs` | Evaluates expression trees and reports runtime errors |
+| `src/evaluator.rs` | Evaluates expression trees, executes statements, and reports runtime errors |
 | `src/expr.rs` | Defines expression AST nodes and their printed representation |
-| `src/parser.rs` | Parses expressions and recovers at file-expression boundaries |
-| `src/repl.rs` | Reads one expression per line and prints its value (or AST with `--parse`) |
-| `src/main.rs` | Dispatches the file parser, tokenizer, REPL, and Lab 0 command |
+| `src/parser.rs` | Parses expressions and programs; recovers at semicolons |
+| `src/stmt.rs` | Defines print and expression statements |
+| `src/repl.rs` | Accepts expressions and print statements; preserves earlier expression modes |
+| `src/main.rs` | Dispatches script execution, earlier flags, and the REPL |
 | `tests/lab2/` | Parser fixtures with inline AST and diagnostic expectations |
 | `tests/lab3/` | Evaluator fixtures with inline value and error expectations |
+| `tests/lab4/` | Script fixtures with inline output, silence, and error expectations |
 | `tests/cli.rs` | Checks CLI output, diagnostics, exit status, and REPL recovery |
 | `tests/cli_tests.rs` | Checks scanner regressions and default REPL compatibility |
