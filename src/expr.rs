@@ -1,4 +1,4 @@
-//! Expression nodes and their parenthesized AST representation.
+//! Expression nodes and their postfix AST representation.
 
 use std::fmt;
 
@@ -26,15 +26,15 @@ impl fmt::Display for Expr {
             Self::Literal(Literal::String(value)) => write!(f, "{value}"),
             Self::Literal(Literal::Boolean(value)) => write!(f, "{value}"),
             Self::Literal(Literal::Null) => write!(f, "nil"),
-            Self::Unary { operator, right } => write!(f, "({} {right})", operator.lexeme()),
+            Self::Unary { operator, right } => write!(f, "{right} {}", operator.lexeme()),
             Self::Binary {
                 left,
                 operator,
                 right,
             } => {
-                write!(f, "({} {left} {right})", operator.lexeme())
+                write!(f, "{left} {right} {}", operator.lexeme())
             }
-            Self::Grouping(expression) => write!(f, "(group {expression})"),
+            Self::Grouping(expression) => write!(f, "{expression}"),
         }
     }
 }
