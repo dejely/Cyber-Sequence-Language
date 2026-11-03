@@ -1,0 +1,4 @@
+// Print statements produce output; ordinary expression statements do not.
+print "Hello!";
+print 2 + 3;
+2 + 3;

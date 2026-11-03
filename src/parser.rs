@@ -1,6 +1,7 @@
 //! Recursive descent expression parser, with recovery between file expressions.
 
 use crate::expr::Expr;
+use crate::stmt::Stmt;
 use crate::token::{ Literal, Token, TokenType };
 
 pub struct Parser {
@@ -58,6 +59,50 @@ impl Parser {
         } else {
             Err(errors.join("\n"))
         }
+    }
+
+    /// Script mode requires a semicolon after every statement, including the last.
+    /// Parse everything before execution so syntax errors cannot cause side effects.
+    pub fn parse_program(&mut self) -> Result<Vec<Stmt>, String> {
+        let mut statements = Vec::new();
+        let mut errors = Vec::new();
+        while !self.is_at_end() {
+            match self.statement() {
+                Ok(statement) => statements.push(statement),
+                Err(message) => {
+                    errors.push(message);
+                    self.synchronize();
+                }
+            }
+        }
+        if errors.is_empty() {
+            Ok(statements)
+        } else {
+            Err(errors.join("\n"))
+        }
+    }
+
+    /// The prompt accepts a print statement or one expression with optional `;`.
+    pub fn parse_repl_statement(&mut self) -> Result<Stmt, String> {
+        if !self.check(&TokenType::Print) {
+            return self.parse().map(Stmt::Expression);
+        }
+        let statement = self.statement()?;
+        if !self.is_at_end() {
+            return Err(self.error("Expect end of statement."));
+        }
+        Ok(statement)
+    }
+
+    fn statement(&mut self) -> Result<Stmt, String> {
+        if self.match_token(&[TokenType::Print]) {
+            let expression = self.expression()?;
+            self.consume(&TokenType::Semicolon, "Expect ';' after value.")?;
+            return Ok(Stmt::Print(expression));
+        }
+        let expression = self.expression()?;
+        self.consume(&TokenType::Semicolon, "Expect ';' after expression.")?;
+        Ok(Stmt::Expression(expression))
     }
 
     pub fn expression(&mut self) -> Result<Expr, String> {

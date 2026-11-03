@@ -1,0 +1,4 @@
+// expect nothing
+2 + 3;
+"not printed";
+false;

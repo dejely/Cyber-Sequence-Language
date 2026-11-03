@@ -21,15 +21,52 @@ fn run(args: &[&str], input: &str) -> Output {
 }
 
 #[test]
-fn explicit_and_positional_file_commands_print_only_the_ast() {
-    for args in [
-        vec!["--parse", "tests/lab2/precedence.csl"],
-        vec!["tests/lab2/precedence.csl"],
-    ] {
-        let output = run(&args, "");
-        assert_eq!(output.status.code(), Some(0));
-        assert_eq!(output.stdout, b"1.0 2.0 3.0 * + 4.0 -\n");
-        assert!(output.stderr.is_empty());
+fn explicit_parse_command_prints_only_the_ast() {
+    let output = run(&["--parse", "tests/lab2/precedence.csl"], "");
+    assert_eq!(output.status.code(), Some(0));
+    assert_eq!(output.stdout, b"1.0 2.0 3.0 * + 4.0 -\n");
+    assert!(output.stderr.is_empty());
+}
+
+#[test]
+fn file_modes_distinguish_execution_evaluation_and_ast_printing() {
+    // Even .src files now execute their contents instead of a hardcoded greeting.
+    for extension in ["csl", "src"] {
+        let path = std::env::temp_dir().join(format!(
+            "cmsc124-script-modes-{}.{extension}",
+            std::process::id()
+        ));
+        std::fs::write(&path, "2 + 3;").unwrap();
+        let file = path.to_str().unwrap();
+        for (args, expected) in [
+            (vec![file], ""),
+            (vec!["--eval", file], "5\n"),
+            (vec!["--evaluate", file], "5\n"),
+            (vec!["--parse", file], "2.0 3.0 +\n"),
+        ] {
+            let output = run(&args, "");
+            assert!(output.status.success());
+            assert_eq!(output.stdout, expected.as_bytes());
+            assert!(output.stderr.is_empty());
+        }
+        std::fs::remove_file(path).unwrap();
+    }
+}
+
+#[test]
+fn program_repl_prints_statements_and_expressions_and_recovers() {
+    for args in [vec![], vec!["--repl"]] {
+        let output = run(
+            &args,
+            "print \"banana\";\nprint 1 / 0;\nprint 2\nprint 2; 3;\n6 * 7\n",
+        );
+        assert!(output.status.success());
+        assert_eq!(output.stdout, b"> banana\n> > > > 42\n> ");
+        assert_eq!(output.stderr, concat!(
+            "[line 1] Runtime error at '/': Division by zero.\n",
+            "[line 1] Error at end: Expect ';' after value.\n",
+            "[line 1] Error at '3': Expect end of statement.\n",
+        ).as_bytes());
     }
 }
 
@@ -74,19 +111,14 @@ fn empty_file_is_a_static_error() {
 }
 
 #[test]
-fn every_repl_entrypoint_continues_after_parser_and_scanner_errors() {
-    for args in [vec!["--parse"]] {
-        let output = run(&args, "1 +\n#\n(2 + 3) * 4\nnil;\n");
-        assert_eq!(output.status.code(), Some(0));
-        assert_eq!(
-            output.stdout,
-            b"> > > 2.0 3.0 + 4.0 *\n> nil\n> "
-        );
-        assert_eq!(
-            output.stderr,
-            b"[line 1] Error at end: Expect expression.\nline 1: Unexpected character '#'.\n"
-        );
-    }
+fn parse_repl_continues_after_parser_and_scanner_errors() {
+    let output = run(&["--parse"], "1 +\n#\n(2 + 3) * 4\nnil;\n");
+    assert_eq!(output.status.code(), Some(0));
+    assert_eq!(output.stdout, b"> > > 2.0 3.0 + 4.0 *\n> nil\n> ");
+    assert_eq!(
+        output.stderr,
+        b"[line 1] Error at end: Expect expression.\nline 1: Unexpected character '#'.\n"
+    );
 }
 
 #[test]

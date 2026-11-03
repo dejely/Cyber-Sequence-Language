@@ -30,7 +30,7 @@ fn default_repl_recovers_after_an_invalid_line() {
         concat!(
             "[line 1] Error at 'var': Expect expression.\n",
             "line 1: Unexpected character '#'.\n",
-            "[line 1] Error at 'print': Expect expression.\n"
+            "[line 1] Error at 'first': Expect expression.\n"
         )
         .as_bytes()
     );
