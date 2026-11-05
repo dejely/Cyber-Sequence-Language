@@ -54,6 +54,115 @@ fn file_modes_distinguish_execution_evaluation_and_ast_printing() {
 }
 
 #[test]
+fn repl_bindings_survive_scanning_parsing_and_runtime_errors() {
+    for args in [vec![], vec!["--repl"]] {
+        let output = run(
+            &args,
+            concat!(
+                "var value = 10;\n",
+                "value = value + 2\n",
+                "#\n",
+                "var value = ;\n",
+                "value = 1 / 0\n",
+                "var value = 1 / 0;\n",
+                "value\n",
+                "var first = missing;\n",
+                "first\n",
+                "missing = 3\n",
+                "missing\n",
+                "var value = value + 1;\n",
+                "print value;\n",
+            ),
+        );
+        assert!(output.status.success());
+        assert_eq!(output.stdout, b"> > 12\n> > > > > 12\n> > > > > > 13\n> ");
+        assert_eq!(
+            output.stderr,
+            concat!(
+                "line 1: Unexpected character '#'.\n",
+                "[line 1] Error at ';': Expect expression.\n",
+                "[line 1] Runtime error at '/': Division by zero.\n",
+                "[line 1] Runtime error at '/': Division by zero.\n",
+                "[line 1] Runtime error at 'missing': Undefined variable 'missing'.\n",
+                "[line 1] Runtime error at 'first': Undefined variable 'first'.\n",
+                "[line 1] Runtime error at 'missing': Undefined variable 'missing'.\n",
+                "[line 1] Runtime error at 'missing': Undefined variable 'missing'.\n",
+            )
+            .as_bytes()
+        );
+    }
+}
+
+#[test]
+fn repl_keeps_completed_assignment_effects_when_a_later_operation_fails() {
+    let output = run(
+        &[],
+        concat!(
+            "var value = 1;\n",
+            "missing = (value = 3)\n",
+            "value\n",
+            "var value = (value = 5) + (1 / 0);\n",
+            "value\n",
+            "missing\n",
+        ),
+    );
+    assert!(output.status.success());
+    assert_eq!(output.stdout, b"> > > 3\n> > 5\n> > ");
+    assert_eq!(
+        output.stderr,
+        concat!(
+            "[line 1] Runtime error at 'missing': Undefined variable 'missing'.\n",
+            "[line 1] Runtime error at '/': Division by zero.\n",
+            "[line 1] Runtime error at 'missing': Undefined variable 'missing'.\n",
+        )
+        .as_bytes()
+    );
+}
+
+#[test]
+fn rejected_repl_declarations_have_no_effect_and_sessions_are_separate() {
+    let output = run(&[], "var value = 1; 2;\nvalue\nvar value = 7\nvalue\n");
+    assert!(output.status.success());
+    assert_eq!(output.stdout, b"> > > > > ");
+    assert_eq!(
+        output.stderr,
+        concat!(
+            "[line 1] Error at '2': Expect end of statement.\n",
+            "[line 1] Runtime error at 'value': Undefined variable 'value'.\n",
+            "[line 1] Error at end: Expect ';' after variable declaration.\n",
+            "[line 1] Runtime error at 'value': Undefined variable 'value'.\n",
+        )
+        .as_bytes()
+    );
+    let first = run(&[], "var value = 7;\nvalue\n");
+    assert!(first.status.success());
+    assert!(first.stderr.is_empty());
+    assert_eq!(first.stdout, b"> > 7\n> ");
+    let second = run(&[], "value\n");
+    assert!(second.status.success());
+    assert_eq!(second.stdout, b"> > ");
+    assert_eq!(
+        second.stderr,
+        b"[line 1] Runtime error at 'value': Undefined variable 'value'.\n"
+    );
+}
+
+#[test]
+fn expression_modes_parse_assignment_and_report_undefined_names_at_runtime() {
+    let parsed = run(&["--parse"], "a = b = 1 + 2\n");
+    assert!(parsed.status.success());
+    assert_eq!(parsed.stdout, b"> a b 1.0 2.0 + = =\n> ");
+    assert!(parsed.stderr.is_empty());
+    let evaluated = run(&["--eval"], "missing\n42\n");
+    assert!(evaluated.status.success());
+    assert_eq!(evaluated.stdout, b"> > 42\n> ");
+    assert_eq!(
+        evaluated.stderr,
+        b"[line 1] Runtime error at 'missing': Undefined variable 'missing'.\n"
+    );
+}
+
+#[test]
 fn program_repl_prints_statements_and_expressions_and_recovers() {
     for args in [vec![], vec!["--repl"]] {
         let output = run(
@@ -62,11 +171,15 @@ fn program_repl_prints_statements_and_expressions_and_recovers() {
         );
         assert!(output.status.success());
         assert_eq!(output.stdout, b"> banana\n> > > > 42\n> ");
-        assert_eq!(output.stderr, concat!(
-            "[line 1] Runtime error at '/': Division by zero.\n",
-            "[line 1] Error at end: Expect ';' after value.\n",
-            "[line 1] Error at '3': Expect end of statement.\n",
-        ).as_bytes());
+        assert_eq!(
+            output.stderr,
+            concat!(
+                "[line 1] Runtime error at '/': Division by zero.\n",
+                "[line 1] Error at end: Expect ';' after value.\n",
+                "[line 1] Error at '3': Expect end of statement.\n",
+            )
+            .as_bytes()
+        );
     }
 }
 
@@ -127,7 +240,10 @@ fn default_and_explicit_repl_print_values_and_recover() {
         let output = run(&args, "1 +\n#\n(2 + 3) * 4\nnil;\n");
         assert_eq!(output.status.code(), Some(0));
         assert_eq!(output.stdout, b"> > > 20\n> nil\n> ");
-        assert_eq!(output.stderr, b"[line 1] Error at end: Expect expression.\nline 1: Unexpected character '#'.\n");
+        assert_eq!(
+            output.stderr,
+            b"[line 1] Error at end: Expect expression.\nline 1: Unexpected character '#'.\n"
+        );
     }
 }
 
@@ -212,5 +328,8 @@ fn evaluation_files_print_values_and_use_exit_70_for_runtime_errors() {
     std::fs::remove_file(path).unwrap();
     assert_eq!(output.status.code(), Some(70));
     assert!(output.stdout.is_empty());
-    assert_eq!(output.stderr, b"[line 1] Runtime error at '/': Division by zero.\n");
+    assert_eq!(
+        output.stderr,
+        b"[line 1] Runtime error at '/': Division by zero.\n"
+    );
 }

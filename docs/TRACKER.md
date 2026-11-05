@@ -1,8 +1,8 @@
 # CMSC 124 Progress Tracker
 
-**Last repository verification:** 2026-11-01
+**Last repository verification:** 2026-11-06
 
-**Current milestone:** Lab 3 — evaluator ready for defense
+**Current milestone:** Lab 4 — Week 2 variables and assignment
 
 This tracker records what the repository implements today. A checked item has
 been verified against the source and the listed test command. An unchecked item
@@ -64,10 +64,11 @@ before marking implementation work complete.
 
 - [x] Parse expressions with precedence, unary operators, and grouping.
 - [x] Build an expression abstract syntax tree.
-- [ ] Parse declarations, blocks, and statements.
+- [x] Parse declarations and print/expression statements.
+- [ ] Parse blocks.
 - [ ] Resolve names and scopes.
 - [x] Evaluate expressions.
-- [ ] Execute statements.
+- [x] Execute declarations and print/expression statements.
 - [x] Define runtime errors and their exit behavior.
 
 ### Verification recorded on 2026-10-11
@@ -154,6 +155,40 @@ dead-code warnings are resolved. The release build completed without warnings.
 - [x] `cargo test` — 19 integration tests passed.
 - [x] Course harness: Lab 0 (1/1), Lab 1 (20/20), Lab 2 (19/19),
   and Lab 3 (25/25) passed locally.
+
+## Lab 4 — Statements and State
+
+**Course reference:** [Lab 4 brief and weekly scope](labs/lab4.md)
+
+### Week 1
+
+- [x] Execute print and expression statements through plain file invocation.
+- [x] Preserve earlier flags and replace the Lab 0 greeting with a real program.
+- [x] Add annotated script tests and include Lab 4 in CI.
+
+### Week 2
+
+- [x] Parse and execute variable declarations, lookup, and assignment.
+- [x] Use one environment per file or REPL session; retain bindings after errors.
+- [x] Document and test nil initializers, redeclarations, and undefined names.
+- [x] Test assignment values, right associativity, evaluation order, and invalid targets.
+- [x] Add a variable-based example under `examples/week2.csl`.
+
+### Week 3 — pending
+
+- [ ] Parse and execute nested blocks with lexical environments.
+- [ ] Test shadowing, outward assignment, and restoration after block errors.
+- [ ] Add scope-aware parser recovery and nested-scope examples.
+- [ ] Confirm CI is green on the final commit.
+
+### Local verification on 2026-11-06
+
+- [x] `./build.sh` completed without warnings.
+- [x] `cargo test` — 25 integration tests passed.
+- [x] Course harness: Lab 0 (1/1), Lab 1 (20/20), Lab 2 (19/19),
+  Lab 3 (25/25), and Lab 4 (22/22) passed locally.
+- [x] `cargo clippy --all-targets -- -D warnings` passed.
+- [x] `./run examples/week2.csl` printed `banana`, `9`, and `15`.
 
 ## Update procedure
 

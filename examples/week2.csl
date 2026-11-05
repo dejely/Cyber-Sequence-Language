@@ -1,0 +1,10 @@
+// Track a small fruit sale using named values and assignment.
+var fruit = "banana";
+var stock = 12;
+var sold = 3;
+var price = 5;
+stock = stock - sold;
+var revenue = sold * price;
+print fruit;
+print stock;
+print revenue;

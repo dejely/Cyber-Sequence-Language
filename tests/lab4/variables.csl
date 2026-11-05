@@ -1,0 +1,7 @@
+var fruit = "ba" + "nana";
+var quantity = 2;
+print fruit; // expect: banana
+print quantity * 3; // expect: 6
+var unset;
+print unset; // expect: nil
+print unset == nil; // expect: true
