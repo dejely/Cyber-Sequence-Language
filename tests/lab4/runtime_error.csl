@@ -1,0 +1,3 @@
+print "before"; // expect: before
+1 / 0; // expect runtime error: Division by zero.
+print "must not run";
