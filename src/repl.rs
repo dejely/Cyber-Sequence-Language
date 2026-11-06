@@ -11,6 +11,7 @@ pub enum PromptMode {
 }
 
 pub fn run_prompt(mode: PromptMode) -> io::Result<()> {
+    let mut interpreter = crate::evaluator::Interpreter::default();
     loop {
         print!("> ");
         io::stdout().flush()?;
@@ -37,14 +38,14 @@ pub fn run_prompt(mode: PromptMode) -> io::Result<()> {
                 if matches!(mode, PromptMode::Parse) {
                     println!("{expression}");
                 } else {
-                    match crate::evaluator::evaluate(&expression) {
+                    match interpreter.evaluate(&expression) {
                         Ok(value) => println!("{value}"),
                         Err(message) => eprintln!("{message}"),
                     }
                 }
             }
             Ok(statement) => {
-                if let Err(message) = crate::evaluator::execute(&statement) {
+                if let Err(message) = interpreter.execute(&statement) {
                     eprintln!("{message}");
                 }
             }

@@ -1,0 +1,4 @@
+// expect nothing
+var value = 1;
+var other;
+other = value = 2;

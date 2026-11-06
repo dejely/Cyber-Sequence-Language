@@ -1,0 +1,1 @@
+var value = value; // expect runtime error: Undefined variable 'value'.

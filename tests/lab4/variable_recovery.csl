@@ -1,0 +1,4 @@
+print "must not run";
+var = 1; // expect error: Expect variable name.
+var second = ; // expect error: Expect expression.
+print 3;

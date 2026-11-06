@@ -1,14 +1,16 @@
 # Cyber Sequence Language (CSL)
 
 This repository implements a scanner, a recursive descent parser, and a
-tree-walking evaluator. Lab 4 Week 1 adds print and expression statements.
-Declarations, variables, blocks, and CSL monitoring operations remain deferred.
+tree-walking evaluator. Lab 4 Weeks 1–2 add print and expression statements,
+variable declarations, lookup, and assignment. Blocks and CSL monitoring
+operations remain deferred.
 
 ## Running the interpreter
 
 Build with `./build.sh`, then use `./run` or `./run --repl` to start the
-program REPL. Enter one expression or `print expression;` per line; expressions
-echo their values, and print statements print once. It continues after scanning,
+program REPL. Enter one expression, `print expression;`, or `var name = value;`
+per line. Expressions echo their values, print statements print once, and
+declarations are silent. Variables persist across inputs and errors. It continues after scanning,
 parsing, or runtime errors. `./run --parse`
 starts an AST-printing REPL. Ctrl-D ends the session on
 Unix. Each entered line starts at source line 1, and the `> ` prompt is printed
@@ -45,29 +47,46 @@ This prints `Hello!` and `5` on separate lines. The last statement evaluates
 without printing. `Stmt::Print` and `Stmt::Expression` both reuse the existing
 expression evaluator; the statement kind controls whether its value is printed.
 
+For Week 2, run `./run examples/week2.csl`. It declares a fruit, stock, sales,
+and price; updates the stock; and prints `banana`, `9`, and `15`. In the REPL:
+
+```text
+> var stock = 12;
+> stock = stock - 3
+9
+> print stock;
+9
+```
+
+The [Lab 4 brief](docs/labs/lab4.md) links the course requirements and records
+which weekly features are implemented.
+
 ## Grammar
 
 The implemented expression grammar follows the
 [Lab 2 brief](docs/labs/lab2.md). Precedence increases from equality through
-primary expressions:
+primary expressions; assignment has the lowest precedence:
 
 ```text
-expression → equality
+expression → assignment
+assignment → IDENTIFIER "=" assignment | equality
 equality   → comparison ( ( "!=" | "==" ) comparison )*
 comparison → term ( ( ">" | ">=" | "<" | "<=" ) term )*
 term       → factor ( ( "-" | "+" ) factor )*
 factor     → unary ( ( "/" | "*" ) unary )*
 unary      → ( "!" | "-" ) unary | primary
-primary    → NUMBER | STRING | "true" | "false" | "nil" | "(" expression ")"
+primary    → NUMBER | STRING | "true" | "false" | "nil" | IDENTIFIER | "(" expression ")"
 
 expressionFile → expression ( ";" expression )* ";"? EOF
 expressionRepl → expression ";"? EOF
 
-program     → statement* EOF
+program     → declaration* EOF
+declaration → varDecl | statement
+varDecl     → "var" IDENTIFIER ( "=" expression )? ";"
 statement   → printStmt | exprStmt
 printStmt   → "print" expression ";"
 exprStmt    → expression ";"
-programRepl → ( printStmt | expression ";"? ) EOF
+programRepl → ( varDecl | printStmt | expression ";"? ) EOF
 ```
 
 Binary operators associate to the left: `10 - 3 - 2` prints
@@ -83,8 +102,8 @@ In `--parse` and `--eval` modes, files may contain several expressions separated
 by semicolons, with an optional
 final semicolon. Newlines remain whitespace, so a file expression may span
 lines. The REPL accepts one complete expression per entry, also with an optional
-final semicolon; it does not collect multiline expressions. Print statements require
-a semicolon even in the default REPL. Neither interface
+final semicolon; it does not collect multiline expressions. Print statements and
+variable declarations require a semicolon even in the default REPL. Neither interface
 silently accepts trailing tokens. Empty or comment-only input in expression modes is an error, as
 in the laboratory examples, and repeated semicolons create empty expressions
 that are also rejected.
@@ -106,9 +125,12 @@ reports both errors:
 [line 2] Error at ';': Expect expression.
 ```
 
-Identifiers, assignment, unary `+`, `and`/`or`, calls, arrays, declarations,
-and CSL rules remain outside this expression grammar even when their tokens
-are recognized. Chained comparisons are parsed left to right; the evaluator
+Assignment associates to the right: `a = b = 7` stores `7` in both existing
+bindings and evaluates to `7`. Its postfix AST is `a b 7.0 = =`. Only a bare
+identifier is an assignment target; `(a) = 7` and `1 = 7` are static errors.
+Declarations are accepted in programs and the default REPL; `--parse` and
+`--eval` retain their expression-only interfaces. Unary `+`, `and`/`or`, calls,
+arrays, blocks, and CSL rules remain outside the grammar. Chained comparisons are parsed left to right; the evaluator
 checks operand types at runtime. The scanner's existing numeric and raw-string
 rules still apply: exponent syntax is unsupported, oversized numbers are
 rejected, and large or small values may print in scientific notation. AST string
@@ -137,7 +159,8 @@ Lab 2 uses inline `// expect:` and `// expect error:` annotations. Lab 3 adds
 `// expect runtime error:` checks for runtime failures. Rust tests also
 check exact diagnostics, suppression of partial output, CLI arguments, and
 REPL continuation. Lab 4 tests plain file execution, explicit output, discarded
-values, semicolon errors, and runtime failures. CI runs all five laboratory
+values, variables, assignment order, redeclarations, semicolon errors, and
+undefined names. REPL integration tests check that bindings survive errors. CI runs all five laboratory
 suites and `cargo test`.
 
 - Jemarco Briz ([Jmbriz123](https://github.com/Jmbriz123))
@@ -153,7 +176,8 @@ Its intended syntax combines explicit punctuation with domain words such as
 lexical scanning, expression parsing, expression evaluation, and basic statements. Lab 1 covers the scanner, diagnostics,
 tests, and lexical specification; Lab 2 adds expression ASTs and printing;
 Lab 3 adds the tree-walking evaluator and runtime errors; Lab 4 Week 1 adds
-print and expression statements in programs. Event
+print and expression statements in programs; Week 2 adds global variables and
+assignment. Event
 adapters and optional RFID credential verification remain future extensions,
 not dependencies of the three-month language prototype.
 
@@ -194,9 +218,8 @@ Example file invocation:
 ```
 
 The default REPL prints `> `, scans and parses one input line, and prints a value or diagnostics.
-Each line starts at source line 1 and accepts one expression or print statement.
-Variables are not supported yet; `var x = 1;` is
-rejected by the expression grammar. A bad line such as `#` reports an error and returns to the
+Each line starts at source line 1 and accepts one expression, print statement,
+or variable declaration. The interpreter retains its environment for the session. A bad line such as `#` reports an error and returns to the
 prompt. End input with EOF (Ctrl-D on Unix-like terminals). Multiline strings
 must be scanned from files because the REPL does not accumulate input lines.
 
@@ -220,7 +243,8 @@ All token categories are defined in [src/token.rs](src/token.rs); scanning is in
 ### Keywords
 
 The words below are recognized now. Their purposes describe intended semantics;
-`print` executes a statement; other keywords remain reserved for future forms.
+`print` and `var` execute statements; `true`, `false`, and `nil` are literals.
+The remaining keywords are reserved for future forms.
 
 | Lexeme   | Token Type | Purpose                           |
 | -------- | ---------- | --------------------------------- |
@@ -563,7 +587,7 @@ Every number CSL prints is finite, and `NaN` can never be produced.
 
 ### Runtime errors and exit codes
 
-Runtime errors are reported on stderr with the operator's line and lexeme,
+Runtime errors are reported on stderr with the operator or name's line and lexeme,
 using the token stored on each AST node:
 
 ```text
@@ -587,8 +611,25 @@ Rust stack trace.
 
 ### Scope and bindings
 
-Deferred to Lab 4, including declaration, shadowing, uninitialized bindings, and
-undefined-name handling. `var x = 1;` does not create a stored variable today.
+CSL currently uses mutable global bindings. `var x = 1;` evaluates the
+initializer, then stores its value under `x`; `var x;` stores `nil`. Redeclaring
+a name replaces its existing value. An initializer can read a previous binding
+with that name, so `var x = x + 1;` works if `x` already exists. A first declaration
+such as `var x = x;` fails because the new name is not defined until its initializer
+finishes. A failed initializer does not install or replace the declared binding;
+effects from assignments already evaluated inside it remain.
+
+Lookup and assignment to an undefined name produce `Undefined variable 'x'.`
+at runtime (file exit 70). Assignment never creates a name. The right side is
+evaluated before the binding is updated; assignment returns that value and may
+change its runtime type. Binary operands still evaluate left before right.
+Errors stop the current input or file; they do not roll back earlier assignments.
+
+A name becomes visible when its declaration executes, and its storage lasts
+until the file execution or REPL session ends. Values and their types are bound
+at runtime and can change. This is one global environment, even though its Rust
+map uses heap storage. Blocks, shadowing, and nested lexical lookup are Week 3
+work; functions and capture lifetimes are not implemented yet.
 
 ### Control flow and functions
 
@@ -605,7 +646,7 @@ Deferred to Lab 5. No native functions are callable. `inspect`, `isolate`, and
 | Condition | Diagnostic example | File exit code |
 | --- | --- | --- |
 | `./run --tokenize tests/lab1/coverage/categories.csl` | Prints tokens | Preserve |
-| `./run --repl` | Accepts one expression or print statement per line; errors return the prompt | Implemented |
+| `./run --repl` | Accepts one expression, print statement, or declaration per line; errors return the prompt | Implemented |
 | `./run` | Starts the program REPL | Implemented |
 | `./run tests/lab0/hello.src` | Executes a CSL print statement | Same Lab 0 output |
 | Rust toolchain | `stable` in `rust-toolchain.toml` | **Step 8:** pin audited version `1.98.0` |
@@ -618,15 +659,15 @@ earlier Lab 0 harness invocation working.
 
 CSL is intended to be dynamically typed. Rust's static types describe the scanner
 and parser implementation, not an implemented CSL type system. For example,
-`var x = 1;` produces tokens with `--tokenize`, but the expression parser
-rejects it; it does not create a variable.
+`var x = 1;` creates a global variable in script mode and the program REPL.
+Expression modes accept variable reads and assignment, but no declarations.
 
 * `{}` will delimit blocks, as in `{ print x; }`.
 * `[]` is reserved for arrays/indexing, as in `items[0]`.
 * `;` terminates statements, as in `print 42;`.
 * `()` groups expressions such as `(1 + 2)`; calls such as `inspect(host)`
   remain planned.
-* Reserved words such as `if`, `else`, `for`, `fun`, `and`, and `var` are already
+* Reserved words such as `if`, `else`, `for`, `fun`, and `and` are already
   recognized; their execution semantics remain deferred.
 
 Explicit punctuation avoids indentation-sensitive scanning. Whole-name keyword
@@ -637,7 +678,7 @@ and escaped token records are now implemented.
 The Lab 1 scope is the scanner, diagnostics, tests, and documentation. Lab 2 adds
 expression parsing, operator precedence, AST printing, and parser diagnostics.
 Expression runtime values, evaluation, print statements, and expression
-statements are implemented. Variables, blocks, CSL rule evaluation, and
+statements, global variables, and assignment are implemented. Blocks, CSL rule evaluation, and
 RFID/CAD integration remain future work. Recognizing `watch` or `inspect` does not implement monitoring or
 inspection.
 
@@ -647,12 +688,13 @@ inspection.
 | ---------------- | ------------------------------------------------------------------------- |
 | `src/token.rs`   | Defines `TokenType`, `Literal`, and `Token`                               |
 | `src/scanner.rs` | Reads the raw source code character by character and turns it into tokens |
+| `src/environment.rs` | Stores global bindings; separates declaration, lookup, and assignment |
 | `src/value.rs` | Defines runtime values, truthiness, and value printing |
 | `src/evaluator.rs` | Evaluates expression trees, executes statements, and reports runtime errors |
 | `src/expr.rs` | Defines expression AST nodes and their printed representation |
 | `src/parser.rs` | Parses expressions and programs; recovers at semicolons |
-| `src/stmt.rs` | Defines print and expression statements |
-| `src/repl.rs` | Accepts expressions and print statements; preserves earlier expression modes |
+| `src/stmt.rs` | Defines variable declarations, print, and expression statements |
+| `src/repl.rs` | Keeps session bindings across input lines and errors |
 | `src/main.rs` | Dispatches script execution, earlier flags, and the REPL |
 | `tests/lab2/` | Parser fixtures with inline AST and diagnostic expectations |
 | `tests/lab3/` | Evaluator fixtures with inline value and error expectations |

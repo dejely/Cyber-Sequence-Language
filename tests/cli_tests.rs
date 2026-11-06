@@ -23,17 +23,9 @@ fn default_repl_recovers_after_an_invalid_line() {
     assert_eq!(result.status.code(), Some(0));
     assert_eq!(
         String::from_utf8(result.stdout).unwrap(),
-        "> > > > 42\n> "
+        "> > > nil\n> 42\n> "
     );
-    assert_eq!(
-        result.stderr,
-        concat!(
-            "[line 1] Error at 'var': Expect expression.\n",
-            "line 1: Unexpected character '#'.\n",
-            "[line 1] Error at 'first': Expect expression.\n"
-        )
-        .as_bytes()
-    );
+    assert_eq!(result.stderr, b"line 1: Unexpected character '#'.\n");
 }
 
 #[test]

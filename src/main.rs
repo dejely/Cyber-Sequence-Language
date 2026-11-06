@@ -1,5 +1,6 @@
 //! CLI entry point for scripts, the earlier expression modes, and the REPL.
 
+mod environment;
 mod evaluator;
 mod expr;
 mod parser;
@@ -61,11 +62,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             std::process::exit(65);
         }
     };
+    let mut interpreter = evaluator::Interpreter::default();
     if matches!(mode, FileMode::Execute) {
         match Parser::new(tokens).parse_program() {
             Ok(statements) => {
                 for statement in statements {
-                    if let Err(message) = evaluator::execute(&statement) {
+                    if let Err(message) = interpreter.execute(&statement) {
                         eprintln!("{message}");
                         std::process::exit(70);
                     }
@@ -82,7 +84,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             Ok(expressions) => {
                 for expression in expressions {
                     if matches!(mode, FileMode::Evaluate) {
-                        match evaluator::evaluate(&expression) {
+                        match interpreter.evaluate(&expression) {
                             Ok(value) => println!("{value}"),
                             Err(message) => {
                                 eprintln!("{message}");

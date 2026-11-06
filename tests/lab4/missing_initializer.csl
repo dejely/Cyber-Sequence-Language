@@ -1,0 +1,1 @@
+var value = ; // expect error: Expect expression.

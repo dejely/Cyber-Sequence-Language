@@ -2,6 +2,7 @@
 
 use std::fmt;
 
+use crate::environment::Environment;
 use crate::expr::Expr;
 use crate::stmt::Stmt;
 use crate::token::{Literal, Token, TokenType};
@@ -11,14 +12,14 @@ use crate::value::Value;
 #[derive(Debug)]
 pub struct RuntimeError {
     operator: Token,
-    message: &'static str,
+    message: String,
 }
 
 impl RuntimeError {
-    fn new(operator: &Token, message: &'static str) -> Self {
+    fn new(operator: &Token, message: impl Into<String>) -> Self {
         Self {
             operator: operator.clone(),
-            message,
+            message: message.into(),
         }
     }
 }
@@ -35,47 +36,75 @@ impl fmt::Display for RuntimeError {
     }
 }
 
-/// Evaluates children before the node itself, so `?` unwinds the first error
-/// to the single caller that decides between exit 70 and the next REPL prompt.
-pub fn evaluate(expression: &Expr) -> Result<Value, RuntimeError> {
-    match expression {
-        Expr::Literal(literal) => Ok(match literal {
-            Literal::Number(value) => Value::Number(*value),
-            Literal::String(value) => Value::String(value.clone()),
-            Literal::Boolean(value) => Value::Boolean(*value),
-            Literal::Null => Value::Nil,
-        }),
-        Expr::Grouping(inner) => evaluate(inner),
-        Expr::Unary { operator, right } => {
-            let right = evaluate(right)?;
-            match operator.token_type() {
-                TokenType::Minus => number(-check_number_operand(operator, &right)?, operator),
-                TokenType::Bang => Ok(Value::Boolean(!right.is_truthy())),
-                _ => Err(RuntimeError::new(operator, "Unsupported unary operator.")),
-            }
-        }
-        Expr::Binary {
-            left,
-            operator,
-            right,
-        } => {
-            // Left before right is a language decision, observable once operands have effects.
-            let left = evaluate(left)?;
-            let right = evaluate(right)?;
-            binary(operator, left, right)
-        }
-    }
+/// Owns the bindings shared by every statement and expression in a session.
+#[derive(Default)]
+pub struct Interpreter {
+    environment: Environment,
 }
 
-/// Both statement forms use the same expression evaluator and error propagation.
-pub fn execute(statement: &Stmt) -> Result<(), RuntimeError> {
-    match statement {
-        Stmt::Print(expression) => println!("{}", evaluate(expression)?),
-        Stmt::Expression(expression) => {
-            evaluate(expression)?;
+impl Interpreter {
+    /// Evaluate left before right; `?` propagates the first runtime error.
+    pub fn evaluate(&mut self, expression: &Expr) -> Result<Value, RuntimeError> {
+        match expression {
+            Expr::Literal(literal) => Ok(match literal {
+                Literal::Number(value) => Value::Number(*value),
+                Literal::String(value) => Value::String(value.clone()),
+                Literal::Boolean(value) => Value::Boolean(*value),
+                Literal::Null => Value::Nil,
+            }),
+            Expr::Variable(name) => self.environment.get(name.lexeme()).ok_or_else(|| {
+                RuntimeError::new(name, format!("Undefined variable '{}'.", name.lexeme()))
+            }),
+            Expr::Assign { name, value } => {
+                let value = self.evaluate(value)?;
+                if !self.environment.assign(name.lexeme(), value.clone()) {
+                    return Err(RuntimeError::new(
+                        name,
+                        format!("Undefined variable '{}'.", name.lexeme()),
+                    ));
+                }
+                Ok(value)
+            }
+            Expr::Grouping(inner) => self.evaluate(inner),
+            Expr::Unary { operator, right } => {
+                let right = self.evaluate(right)?;
+                match operator.token_type() {
+                    TokenType::Minus => number(-check_number_operand(operator, &right)?, operator),
+                    TokenType::Bang => Ok(Value::Boolean(!right.is_truthy())),
+                    _ => Err(RuntimeError::new(operator, "Unsupported unary operator.")),
+                }
+            }
+            Expr::Binary {
+                left,
+                operator,
+                right,
+            } => {
+                // Left before right is a language decision, observable once operands have effects.
+                let left = self.evaluate(left)?;
+                let right = self.evaluate(right)?;
+                binary(operator, left, right)
+            }
         }
     }
-    Ok(())
+
+    /// Statements share the expression evaluator and its runtime errors.
+    pub fn execute(&mut self, statement: &Stmt) -> Result<(), RuntimeError> {
+        match statement {
+            Stmt::Var { name, initializer } => {
+                // Define only after success; initializer assignments keep their own effects.
+                let value = match initializer {
+                    Some(expression) => self.evaluate(expression)?,
+                    None => Value::Nil,
+                };
+                self.environment.define(name.lexeme(), value);
+            }
+            Stmt::Print(expression) => println!("{}", self.evaluate(expression)?),
+            Stmt::Expression(expression) => {
+                self.evaluate(expression)?;
+            }
+        }
+        Ok(())
+    }
 }
 
 fn binary(operator: &Token, left: Value, right: Value) -> Result<Value, RuntimeError> {

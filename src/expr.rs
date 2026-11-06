@@ -7,6 +7,11 @@ use crate::token::{Literal, Token};
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expr {
     Literal(Literal),
+    Variable(Token),
+    Assign {
+        name: Token,
+        value: Box<Expr>,
+    },
     Unary {
         operator: Token,
         right: Box<Expr>,
@@ -22,6 +27,8 @@ pub enum Expr {
 impl fmt::Display for Expr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::Variable(name) => write!(f, "{}", name.lexeme()),
+            Self::Assign { name, value } => write!(f, "{} {value} =", name.lexeme()),
             Self::Literal(Literal::Number(value)) => write!(f, "{value:?}"),
             Self::Literal(Literal::String(value)) => write!(f, "{value}"),
             Self::Literal(Literal::Boolean(value)) => write!(f, "{value}"),

@@ -1,8 +1,8 @@
-//! Recursive descent expression parser, with recovery between file expressions.
+//! Recursive descent parser for expressions and programs, with semicolon recovery.
 
 use crate::expr::Expr;
 use crate::stmt::Stmt;
-use crate::token::{ Literal, Token, TokenType };
+use crate::token::{Literal, Token, TokenType};
 
 pub struct Parser {
     tokens: Vec<Token>,
@@ -67,7 +67,7 @@ impl Parser {
         let mut statements = Vec::new();
         let mut errors = Vec::new();
         while !self.is_at_end() {
-            match self.statement() {
+            match self.declaration() {
                 Ok(statement) => statements.push(statement),
                 Err(message) => {
                     errors.push(message);
@@ -82,16 +82,35 @@ impl Parser {
         }
     }
 
-    /// The prompt accepts a print statement or one expression with optional `;`.
+    /// The prompt accepts a declaration, print statement, or one expression.
     pub fn parse_repl_statement(&mut self) -> Result<Stmt, String> {
-        if !self.check(&TokenType::Print) {
+        if !self.check(&TokenType::Print) && !self.check(&TokenType::Var) {
             return self.parse().map(Stmt::Expression);
         }
-        let statement = self.statement()?;
+        let statement = self.declaration()?;
         if !self.is_at_end() {
             return Err(self.error("Expect end of statement."));
         }
         Ok(statement)
+    }
+
+    fn declaration(&mut self) -> Result<Stmt, String> {
+        if self.match_token(&[TokenType::Var]) {
+            let name = self
+                .consume(&TokenType::Identifier, "Expect variable name.")?
+                .clone();
+            let initializer = if self.match_token(&[TokenType::Equal]) {
+                Some(self.expression()?)
+            } else {
+                None
+            };
+            self.consume(
+                &TokenType::Semicolon,
+                "Expect ';' after variable declaration.",
+            )?;
+            return Ok(Stmt::Var { name, initializer });
+        }
+        self.statement()
     }
 
     fn statement(&mut self) -> Result<Stmt, String> {
@@ -106,7 +125,28 @@ impl Parser {
     }
 
     pub fn expression(&mut self) -> Result<Expr, String> {
-        self.equality()
+        self.assignment()
+    }
+
+    fn assignment(&mut self) -> Result<Expr, String> {
+        let expression = self.equality()?;
+        if self.match_token(&[TokenType::Equal]) {
+            let equals = self.previous().clone();
+            // Recursing on the right makes a = b = value right associative.
+            let value = self.assignment()?;
+            if let Expr::Variable(name) = expression {
+                return Ok(Expr::Assign {
+                    name,
+                    value: Box::new(value),
+                });
+            }
+            return Err(format!(
+                "[line {}] Error at '{}': Invalid assignment target.",
+                equals.line(),
+                equals.lexeme()
+            ));
+        }
+        Ok(expression)
     }
 
     pub fn equality(&mut self) -> Result<Expr, String> {
@@ -130,16 +170,12 @@ impl Parser {
         // Start at the next tighter precedence level; self-recursion never advances.
         let mut expr = self.term()?;
 
-        while
-            self.match_token(
-                &[
-                    TokenType::Greater,
-                    TokenType::GreaterEqual,
-                    TokenType::Less,
-                    TokenType::LessEqual,
-                ]
-            )
-        {
+        while self.match_token(&[
+            TokenType::Greater,
+            TokenType::GreaterEqual,
+            TokenType::Less,
+            TokenType::LessEqual,
+        ]) {
             let operator = self.previous().clone();
             let right = self.term()?;
 
@@ -196,6 +232,9 @@ impl Parser {
     }
 
     pub fn primary(&mut self) -> Result<Expr, String> {
+        if self.match_token(&[TokenType::Identifier]) {
+            return Ok(Expr::Variable(self.previous().clone()));
+        }
         if self.match_token(&[TokenType::False]) {
             return Ok(Expr::Literal(Literal::Boolean(false)));
         }
@@ -233,7 +272,11 @@ impl Parser {
     }
 
     fn consume(&mut self, token_type: &TokenType, message: &str) -> Result<&Token, String> {
-        if self.check(token_type) { Ok(self.advance()) } else { Err(self.error(message)) }
+        if self.check(token_type) {
+            Ok(self.advance())
+        } else {
+            Err(self.error(message))
+        }
     }
 
     fn check(&self, token_type: &TokenType) -> bool {
