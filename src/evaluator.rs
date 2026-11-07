@@ -90,6 +90,19 @@ impl Interpreter {
     /// Statements share the expression evaluator and its runtime errors.
     pub fn execute(&mut self, statement: &Stmt) -> Result<(), RuntimeError> {
         match statement {
+            Stmt::Block(statements) => {
+                let enclosing = std::mem::take(&mut self.environment);
+                self.environment = Environment::enclosed(enclosing);
+                // Save the result before propagating errors so every block restores
+                // its parent, including each level of a failing nested block.
+                let result = statements
+                    .iter()
+                    .try_for_each(|statement| self.execute(statement));
+                self.environment = std::mem::take(&mut self.environment)
+                    .into_enclosing()
+                    .expect("a block always has an enclosing environment");
+                result?;
+            }
             Stmt::Var { name, initializer } => {
                 // Define only after success; initializer assignments keep their own effects.
                 let value = match initializer {

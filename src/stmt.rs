@@ -5,6 +5,7 @@ use crate::token::Token;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Stmt {
+    Block(Vec<Stmt>),
     Var {
         name: Token,
         initializer: Option<Expr>,

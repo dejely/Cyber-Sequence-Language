@@ -61,19 +61,29 @@ impl Parser {
         }
     }
 
-    /// Script mode requires a semicolon after every statement, including the last.
+    /// Script mode requires a semicolon after declarations, prints, and expressions.
     /// Parse everything before execution so syntax errors cannot cause side effects.
     pub fn parse_program(&mut self) -> Result<Vec<Stmt>, String> {
+        self.statement_list(false)
+    }
+
+    fn statement_list(&mut self, in_block: bool) -> Result<Vec<Stmt>, String> {
         let mut statements = Vec::new();
         let mut errors = Vec::new();
-        while !self.is_at_end() {
+        while !self.is_at_end() && !(in_block && self.check(&TokenType::RightBrace)) {
+            let start = self.current;
             match self.declaration() {
                 Ok(statement) => statements.push(statement),
                 Err(message) => {
                     errors.push(message);
-                    self.synchronize();
+                    self.synchronize_statement(start, in_block);
                 }
             }
+        }
+        if in_block
+            && let Err(message) = self.consume(&TokenType::RightBrace, "Expect '}' after block.")
+        {
+            errors.push(message);
         }
         if errors.is_empty() {
             Ok(statements)
@@ -82,9 +92,12 @@ impl Parser {
         }
     }
 
-    /// The prompt accepts a declaration, print statement, or one expression.
+    /// The prompt accepts a declaration, print statement, block, or one expression.
     pub fn parse_repl_statement(&mut self) -> Result<Stmt, String> {
-        if !self.check(&TokenType::Print) && !self.check(&TokenType::Var) {
+        if !self.check(&TokenType::Print)
+            && !self.check(&TokenType::Var)
+            && !self.check(&TokenType::LeftBrace)
+        {
             return self.parse().map(Stmt::Expression);
         }
         let statement = self.declaration()?;
@@ -114,6 +127,9 @@ impl Parser {
     }
 
     fn statement(&mut self) -> Result<Stmt, String> {
+        if self.match_token(&[TokenType::LeftBrace]) {
+            return self.statement_list(true).map(Stmt::Block);
+        }
         if self.match_token(&[TokenType::Print]) {
             let expression = self.expression()?;
             self.consume(&TokenType::Semicolon, "Expect ';' after value.")?;
@@ -318,6 +334,40 @@ impl Parser {
         while !self.is_at_end() {
             if self.advance().token_type() == &TokenType::Semicolon {
                 return;
+            }
+        }
+    }
+
+    fn synchronize_statement(&mut self, start: usize, in_block: bool) {
+        // Always advance after a failure at the same token, except when the
+        // closing brace belongs to the caller. Expression modes keep their
+        // original semicolon-only recovery above.
+        if self.current == start && !self.is_at_end() {
+            if in_block && self.check(&TokenType::RightBrace) {
+                return;
+            }
+            self.advance();
+        }
+        while !self.is_at_end() {
+            if self.current > 0
+                && matches!(
+                    self.previous().token_type(),
+                    TokenType::Semicolon | TokenType::RightBrace
+                )
+            {
+                return;
+            }
+            match self.peek().token_type() {
+                TokenType::Var | TokenType::Print | TokenType::LeftBrace => return,
+                TokenType::RightBrace => {
+                    if !in_block {
+                        self.advance();
+                    }
+                    return;
+                }
+                _ => {
+                    self.advance();
+                }
             }
         }
     }

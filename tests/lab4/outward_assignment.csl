@@ -1,0 +1,13 @@
+var total = 1;
+{
+    var subtotal = 2;
+    {
+        print total = total + subtotal; // expect: 3
+        subtotal = 5;
+    }
+    print subtotal; // expect: 5
+    var total = 10;
+    { total = total + 1; }
+    print total; // expect: 11
+}
+print total; // expect: 3

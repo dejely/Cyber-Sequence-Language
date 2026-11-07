@@ -1,0 +1,5 @@
+print "must not run";
+{
+    var value = 1;
+    { print value; }
+// expect error: Expect '}' after block.

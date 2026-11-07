@@ -1,0 +1,2 @@
+print "must not run";
+{ print (1 + 2; } // expect error: Expect ')' after expression.

@@ -1,0 +1,10 @@
+var value = "outer";
+{
+    var value = "middle";
+    {
+        var value = "inner";
+        print value; // expect: inner
+    }
+    print value; // expect: middle
+}
+print value; // expect: outer
