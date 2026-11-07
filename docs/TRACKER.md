@@ -180,7 +180,7 @@ dead-code warnings are resolved. The release build completed without warnings.
 - [x] Test shadowing, outward assignment, and restoration after block errors.
 - [x] Add scope-aware parser recovery and nested-scope examples.
 - [x] Document grammar, binding time, storage lifetime, mutability, and output.
-- [ ] Confirm CI is green on the final commit.
+- [x] Confirm CI is green on the Week 3 commit; see [PR #45 checks](https://github.com/dejely/Cyber-Sequence-Language/pull/45/checks).
 
 ### Local verification on 2026-11-06
 
