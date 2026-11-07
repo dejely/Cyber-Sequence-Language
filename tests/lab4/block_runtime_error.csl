@@ -1,0 +1,8 @@
+var value = "outer";
+{
+    var value = "inner";
+    { print value; } // expect: inner
+    print 1 / 0; // expect runtime error: Division by zero.
+    print "must not run";
+}
+print "must not run";

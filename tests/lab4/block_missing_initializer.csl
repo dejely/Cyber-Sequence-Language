@@ -1,0 +1,3 @@
+print "must not run";
+{ var value = ; } // expect error: Expect expression.
+print "must not run";

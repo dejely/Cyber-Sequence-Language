@@ -1,0 +1,22 @@
+// Track a banana stall's stock across two sales, with sale-local prices.
+var fruit = "banana";
+var stock = 20;
+var revenue = 0;
+var price = 5;
+{
+    var sold = 3;
+    stock = stock - sold;
+    revenue = revenue + sold * price;
+    {
+        var price = 4;
+        var sold = 2;
+        stock = stock - sold;
+        revenue = revenue + sold * price;
+        print price; // 4: discount applies only to this sale.
+    }
+    print sold; // 3: the first sale's binding is restored.
+}
+print fruit; // banana
+print stock; // 15
+print revenue; // 23
+print price; // 5: the usual price remains unchanged.
