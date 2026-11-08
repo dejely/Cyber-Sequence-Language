@@ -1,0 +1,10 @@
+var value = 1;
+{
+    var value = value + 1;
+    print value; // expect: 2
+    var value = value + 3;
+    print value; // expect: 5
+    var value;
+    print value; // expect: nil
+}
+print value; // expect: 1

@@ -1,0 +1,11 @@
+var fruit = "banana";
+var quantity = 12;
+{
+    var sold = 3;
+    {
+        print fruit; // expect: banana
+        print quantity - sold; // expect: 9
+    }
+    print quantity; // expect: 12
+}
+print quantity; // expect: 12

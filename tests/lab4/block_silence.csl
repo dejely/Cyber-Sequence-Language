@@ -1,0 +1,8 @@
+// expect nothing
+{}
+var value = 1;
+{
+    var local;
+    { value = 2; local = "banana"; }
+    local;
+}

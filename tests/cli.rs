@@ -333,3 +333,104 @@ fn evaluation_files_print_values_and_use_exit_70_for_runtime_errors() {
         b"[line 1] Runtime error at '/': Division by zero.\n"
     );
 }
+
+#[test]
+fn repl_restores_all_scopes_after_success_and_nested_runtime_errors() {
+    for args in [vec![], vec!["--repl"]] {
+        let output = run(
+            &args,
+            concat!(
+                "var value = 10;\n",
+                "{ var value = 20; { value = 21; print value; } print value; }\n",
+                "value\n",
+                "{ value = 11; var value = 99; { var local = 1; 1 / 0; } value = 100; }\n",
+                "value\n",
+                "local\n",
+                "{ var value = value + 1; print value; }\n",
+                "value\n",
+                "var after = value + 1;\n",
+                "after\n",
+            ),
+        );
+        assert!(output.status.success());
+        assert_eq!(
+            output.stdout,
+            b"> > 21\n21\n> 10\n> > 11\n> > 12\n> 11\n> > 12\n> "
+        );
+        assert_eq!(
+            output.stderr,
+            concat!(
+                "[line 1] Runtime error at '/': Division by zero.\n",
+                "[line 1] Runtime error at 'local': Undefined variable 'local'.\n",
+            )
+            .as_bytes()
+        );
+    }
+}
+
+#[test]
+fn malformed_repl_blocks_have_no_effect_and_recover_on_the_next_input() {
+    let output = run(
+        &[],
+        concat!(
+            "var value = 1;\n",
+            "{ value = 9; { var local = ; } print value; }\n",
+            "value\n",
+            "{ var local = 3;\n",
+            "local\n",
+            "{}\n",
+            "{ print value; } 2;\n",
+            "value\n",
+        ),
+    );
+    assert!(output.status.success());
+    assert_eq!(output.stdout, b"> > > 1\n> > > > > 1\n> ");
+    assert_eq!(
+        output.stderr,
+        concat!(
+            "[line 1] Error at ';': Expect expression.\n",
+            "[line 1] Error at end: Expect '}' after block.\n",
+            "[line 1] Runtime error at 'local': Undefined variable 'local'.\n",
+            "[line 1] Error at '2': Expect end of statement.\n",
+        )
+        .as_bytes()
+    );
+}
+
+#[test]
+fn program_recovery_preserves_block_boundaries_and_statement_starters() {
+    let path =
+        std::env::temp_dir().join(format!("cmsc124-block-recovery-{}.csl", std::process::id()));
+    std::fs::write(
+        &path,
+        concat!(
+            "print \"must not run\";\n",
+            "{ var a = ; { print ; } var b = 2 }\n",
+            "var = 3;\n",
+            "}\n",
+            "print ;\n",
+            "var a = 1 print 2;\n",
+            "{ var b = 1\n",
+        ),
+    )
+    .unwrap();
+    let output = run(&[path.to_str().unwrap()], "");
+    std::fs::remove_file(path).unwrap();
+    assert_eq!(output.status.code(), Some(65));
+    assert!(output.stdout.is_empty());
+    assert_eq!(
+        output.stderr,
+        concat!(
+            "[line 2] Error at ';': Expect expression.\n",
+            "[line 2] Error at ';': Expect expression.\n",
+            "[line 2] Error at '}': Expect ';' after variable declaration.\n",
+            "[line 3] Error at '=': Expect variable name.\n",
+            "[line 4] Error at '}': Expect expression.\n",
+            "[line 5] Error at ';': Expect expression.\n",
+            "[line 6] Error at 'print': Expect ';' after variable declaration.\n",
+            "[line 8] Error at end: Expect ';' after variable declaration.\n",
+            "[line 8] Error at end: Expect '}' after block.\n",
+        )
+        .as_bytes()
+    );
+}

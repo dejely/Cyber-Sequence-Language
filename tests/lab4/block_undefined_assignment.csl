@@ -1,0 +1,2 @@
+var value = 1;
+{ { missing = value; } } // expect runtime error: Undefined variable 'missing'.
