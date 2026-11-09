@@ -1,0 +1,1 @@
+var stock = 1; @doc(stock = 2) var fruit; // expect error: [line 1] Error at 'stock': Expect string literal annotation argument.

@@ -15,4 +15,5 @@ jobs:
       - run: python3 run_tests.py tests/lab3
       - run: python3 run_tests.py tests/lab4
       - run: python3 run_tests.py tests/lab5
+      - run: python3 run_tests.py tests/annotations
       - run: cargo test

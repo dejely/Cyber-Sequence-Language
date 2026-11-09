@@ -1,0 +1,1 @@
+var @deprecated fruit; // expect error: [line 1] Error at '@': Expect variable name.

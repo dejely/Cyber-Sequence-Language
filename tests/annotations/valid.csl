@@ -1,0 +1,21 @@
+// Metadata describes declarations without changing execution.
+@deprecated
+var oldFruit = "banana";
+print oldFruit; // expect: banana
+@doc("Price per fruit") @deprecated("Use currentPrice")
+var oldPrice = 4;
+oldPrice = oldPrice + 1;
+print oldPrice; // expect: 5
+{
+    @doc("Discount price") var oldPrice = 2;
+    print oldPrice; // expect: 2
+}
+print oldPrice; // expect: 5
+@deprecated() var reserved;
+print reserved; // expect: nil
+@doc("Replacement price") var currentPrice = 3;
+for (@doc("Sale index") var i = 0; i < 2; i = i + 1) {
+    print currentPrice; // expect: 3
+    // expect: 3
+}
+// @entry in a comment is not parsed as an annotation.

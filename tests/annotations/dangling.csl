@@ -1,0 +1,1 @@
+@deprecated // expect error: [line 2] Error at end: Annotations must precede a 'var' declaration.

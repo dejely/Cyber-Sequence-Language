@@ -1,0 +1,1 @@
+@doc() var fruit; // expect error: [line 1] Error at 'doc': Annotation '@doc' requires one string argument.

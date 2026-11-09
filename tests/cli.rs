@@ -496,3 +496,81 @@ fn repl_restores_scope_after_a_runtime_error_inside_a_loop_body() {
         .as_bytes()
     );
 }
+
+#[test]
+fn annotated_programs_preserve_execution_and_runtime_errors() {
+    let output = run(&["tests/annotations/valid.csl"], "");
+    assert_eq!(output.status.code(), Some(0));
+    assert_eq!(output.stdout, b"banana\n5\n2\n5\nnil\n3\n3\n");
+    assert!(output.stderr.is_empty());
+
+    let output = run(&["tests/annotations/runtime_error.csl"], "");
+    assert_eq!(output.status.code(), Some(70));
+    assert!(output.stdout.is_empty());
+    assert_eq!(
+        output.stderr,
+        b"[line 1] Runtime error at 'missing': Undefined variable 'missing'.\n"
+    );
+}
+
+#[test]
+fn annotation_errors_reject_the_entire_file_before_execution() {
+    let path = std::env::temp_dir().join(format!("cmsc124-annotations-{}.csl", std::process::id()));
+    std::fs::write(&path, "print \"must not run\";\n@entry var main;").unwrap();
+    let output = run(&[path.to_str().unwrap()], "");
+    std::fs::remove_file(path).unwrap();
+    assert_eq!(output.status.code(), Some(65));
+    assert!(output.stdout.is_empty());
+    assert_eq!(
+        output.stderr,
+        b"[line 2] Error at 'entry': Unknown annotation '@entry'.\n"
+    );
+}
+
+#[test]
+fn annotation_repl_keeps_metadata_silent_and_recovers_after_errors() {
+    for args in [vec![], vec!["--repl"]] {
+        let output = run(
+            &args,
+            concat!(
+                "@deprecated @doc(\"Old fruit\") var fruit = \"banana\";\n",
+                "fruit\n",
+                "@doc(fruit = \"mango\") var invalid;\n",
+                "fruit\n",
+                "@deprecated\n",
+                "@doc(\"Stock\") var stock = 2;\n",
+                "stock\n",
+                "{ @deprecated var fruit = \"mango\"; 1 / 0; }\n",
+                "fruit\n",
+            ),
+        );
+        assert_eq!(output.status.code(), Some(0));
+        assert_eq!(
+            output.stdout,
+            b"> > banana\n> > banana\n> > > 2\n> > banana\n> "
+        );
+        assert_eq!(
+            output.stderr,
+            concat!(
+                "[line 1] Error at 'fruit': Expect string literal annotation argument.\n",
+                "[line 1] Error at end: Annotations must precede a 'var' declaration.\n",
+                "[line 1] Runtime error at '/': Division by zero.\n",
+            )
+            .as_bytes()
+        );
+    }
+}
+
+#[test]
+fn annotations_remain_declarations_in_expression_only_modes() {
+    for mode in ["--parse", "--eval", "--evaluate"] {
+        let output = run(&[mode, "examples/annotations.csl"], "");
+        assert_eq!(output.status.code(), Some(65));
+        assert!(output.stdout.is_empty());
+        assert!(
+            String::from_utf8(output.stderr)
+                .unwrap()
+                .contains("Error at '@': Expect expression.")
+        );
+    }
+}

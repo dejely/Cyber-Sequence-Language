@@ -1,0 +1,1 @@
+@deprecated print "hidden"; // expect error: [line 1] Error at 'print': Annotations must precede a 'var' declaration.

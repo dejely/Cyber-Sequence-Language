@@ -1,7 +1,7 @@
 //! Recursive descent parser for expressions and programs, with semicolon recovery.
 
 use crate::expr::Expr;
-use crate::stmt::Stmt;
+use crate::stmt::{Annotation, Stmt};
 use crate::token::{Literal, Token, TokenType};
 
 pub struct Parser {
@@ -105,14 +105,64 @@ impl Parser {
     }
 
     fn declaration(&mut self) -> Result<Stmt, String> {
+        let annotations = self.annotations()?;
         if self.match_token(&[TokenType::Var]) {
-            return self.var_declaration();
+            return self.var_declaration(annotations);
+        }
+        if !annotations.is_empty() {
+            return Err(self.error("Annotations must precede a 'var' declaration."));
         }
         self.statement()
     }
 
+    /// Only built-in metadata is accepted. Arguments are strings, never expressions.
+    fn annotations(&mut self) -> Result<Vec<Annotation>, String> {
+        let mut annotations: Vec<Annotation> = Vec::new();
+        while self.match_token(&[TokenType::At]) {
+            if !self.check(&TokenType::Identifier) {
+                return Err(self.error("Expect annotation name after '@'."));
+            }
+            if !matches!(self.peek().lexeme(), "deprecated" | "doc") {
+                return Err(self.error(&format!("Unknown annotation '@{}'.", self.peek().lexeme())));
+            }
+            if annotations
+                .iter()
+                .any(|annotation| annotation.name.lexeme() == self.peek().lexeme())
+            {
+                return Err(self.error("Duplicate annotation on declaration."));
+            }
+            let name = self.advance().clone();
+            let mut arguments = Vec::new();
+            if self.match_token(&[TokenType::LeftParen]) {
+                if !self.check(&TokenType::RightParen) {
+                    let argument = self
+                        .consume(
+                            &TokenType::String,
+                            "Expect string literal annotation argument.",
+                        )?
+                        .literal()
+                        .cloned()
+                        .ok_or_else(|| self.error("Expect string literal annotation argument."))?;
+                    arguments.push(argument);
+                }
+                self.consume(
+                    &TokenType::RightParen,
+                    "Expect ')' after annotation argument (at most one string).",
+                )?;
+            }
+            if name.lexeme() == "doc" && arguments.len() != 1 {
+                return Err(format!(
+                    "[line {}] Error at 'doc': Annotation '@doc' requires one string argument.",
+                    name.line()
+                ));
+            }
+            annotations.push(Annotation { name, arguments });
+        }
+        Ok(annotations)
+    }
+
     /// Parses the rest of `var name (= value)? ;` after the `var` keyword.
-    fn var_declaration(&mut self) -> Result<Stmt, String> {
+    fn var_declaration(&mut self, annotations: Vec<Annotation>) -> Result<Stmt, String> {
         let name = self
             .consume(&TokenType::Identifier, "Expect variable name.")?
             .clone();
@@ -125,7 +175,11 @@ impl Parser {
             &TokenType::Semicolon,
             "Expect ';' after variable declaration.",
         )?;
-        Ok(Stmt::Var { name, initializer })
+        Ok(Stmt::Var {
+            annotations,
+            name,
+            initializer,
+        })
     }
 
     fn statement(&mut self) -> Result<Stmt, String> {
@@ -196,8 +250,8 @@ impl Parser {
         self.consume(&TokenType::LeftParen, "Expect '(' after 'for'.")?;
         let initializer = if self.match_token(&[TokenType::Semicolon]) {
             None
-        } else if self.match_token(&[TokenType::Var]) {
-            Some(self.var_declaration()?)
+        } else if self.check(&TokenType::Var) || self.check(&TokenType::At) {
+            Some(self.declaration()?)
         } else {
             Some(self.expression_statement()?)
         };
@@ -370,7 +424,8 @@ impl Parser {
     fn at_statement_keyword(&self) -> bool {
         matches!(
             self.peek().token_type(),
-            TokenType::Var
+            TokenType::At
+                | TokenType::Var
                 | TokenType::Print
                 | TokenType::LeftBrace
                 | TokenType::If
@@ -474,5 +529,119 @@ impl Parser {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::scanner::Scanner;
+
+    fn program(source: &str) -> Vec<Stmt> {
+        Parser::new(Scanner::new(source.to_string()).scan_tokens().unwrap())
+            .parse_program()
+            .unwrap()
+    }
+
+    #[test]
+    fn annotation_tokens_keep_names_arguments_and_source_lines() {
+        let tokens = Scanner::new("// @ignored\n@deprecated(\"old\")\nvar fruit;".into())
+            .scan_tokens()
+            .unwrap();
+        assert_eq!(tokens[0].token_type(), &TokenType::At);
+        assert_eq!(tokens[0].line(), 2);
+        assert_eq!(tokens[1].lexeme(), "deprecated");
+        assert_eq!(tokens[1].token_type(), &TokenType::Identifier);
+        assert_eq!(tokens[3].literal(), Some(&Literal::String("old".into())));
+        assert_eq!(tokens[5].token_type(), &TokenType::Var);
+        assert_eq!(tokens[5].line(), 3);
+    }
+
+    #[test]
+    fn metadata_attaches_only_to_the_immediately_following_declaration() {
+        let statements = program(concat!(
+            "@deprecated\n// description\n@doc(\"Use freshFruit\") var oldFruit = \"banana\";\n",
+            "var freshFruit = \"mango\";\n",
+            "{ @doc(\"Local stock\") var stock = 3; var price; }",
+        ));
+        let Stmt::Var {
+            annotations,
+            name,
+            initializer,
+        } = &statements[0]
+        else {
+            panic!("expected variable declaration");
+        };
+        assert_eq!(name.lexeme(), "oldFruit");
+        assert_eq!(
+            *initializer,
+            Some(Expr::Literal(Literal::String("banana".into())))
+        );
+        assert_eq!(annotations.len(), 2);
+        assert_eq!(annotations[0].name.lexeme(), "deprecated");
+        assert_eq!(annotations[0].name.line(), 1);
+        assert!(annotations[0].arguments.is_empty());
+        assert_eq!(annotations[1].name.lexeme(), "doc");
+        assert_eq!(annotations[1].name.line(), 3);
+        assert_eq!(
+            annotations[1].arguments,
+            vec![Literal::String("Use freshFruit".into())]
+        );
+        assert!(matches!(&statements[1], Stmt::Var { annotations, .. } if annotations.is_empty()));
+        let Stmt::Block(locals) = &statements[2] else {
+            panic!("expected block")
+        };
+        assert!(matches!(&locals[0], Stmt::Var { annotations, .. } if annotations.len() == 1));
+        assert!(matches!(&locals[1], Stmt::Var { annotations, .. } if annotations.is_empty()));
+    }
+
+    #[test]
+    fn annotation_arguments_and_order_are_preserved() {
+        let statements = program(
+            "@doc(\"Old stock\") @deprecated(\"Use stock\") var oldStock; @deprecated() var oldPrice;",
+        );
+        let Stmt::Var { annotations, .. } = &statements[0] else {
+            panic!("expected declaration")
+        };
+        assert_eq!(annotations[0].name.lexeme(), "doc");
+        assert_eq!(
+            annotations[1].arguments,
+            vec![Literal::String("Use stock".into())]
+        );
+        assert!(
+            matches!(&statements[1], Stmt::Var { annotations, .. } if annotations[0].arguments.is_empty())
+        );
+
+        let statements = program("for (@doc(\"Sale index\") var i = 0; i < 1; i = i + 1) {}");
+        let Stmt::Block(desugared) = &statements[0] else {
+            panic!("expected desugared for block")
+        };
+        let Stmt::Var {
+            annotations, name, ..
+        } = &desugared[0]
+        else {
+            panic!("expected loop initializer")
+        };
+        assert_eq!(name.lexeme(), "i");
+        assert_eq!(
+            annotations[0].arguments,
+            vec![Literal::String("Sale index".into())]
+        );
+    }
+
+    #[test]
+    fn recovery_retains_annotation_starters_and_block_boundaries() {
+        let tokens = Scanner::new("{ var x = 1\n@doc() var y; }\n@deprecated print 2;".into())
+            .scan_tokens()
+            .unwrap();
+        let error = Parser::new(tokens).parse_program().unwrap_err();
+        assert_eq!(
+            error,
+            concat!(
+                "[line 2] Error at '@': Expect ';' after variable declaration.\n",
+                "[line 2] Error at 'doc': Annotation '@doc' requires one string argument.\n",
+                "[line 3] Error at 'print': Annotations must precede a 'var' declaration."
+            )
+        );
     }
 }

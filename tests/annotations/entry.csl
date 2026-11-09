@@ -1,0 +1,1 @@
+@entry var main; // expect error: [line 1] Error at 'entry': Unknown annotation '@entry'.

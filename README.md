@@ -4,6 +4,7 @@ This repository implements a scanner, a recursive descent parser, and a
 tree-walking evaluator. Lab 4 Weeks 1–3 add print and expression statements,
 variable declarations, lookup, assignment, and nested lexical blocks. Lab 5
 Week 1 adds `if`/`else`, `while`, and `for` control flow.
+Declaration annotations add validated metadata to `var` declarations.
 CSL monitoring operations remain deferred.
 
 ## Running the interpreter
@@ -89,7 +90,8 @@ expressionFile → expression ( ";" expression )* ";"? EOF
 expressionRepl → expression ";"? EOF
 
 program     → declaration* EOF
-declaration → varDecl | statement
+declaration → annotation* varDecl | statement
+annotation  → "@" IDENTIFIER ( "(" STRING? ")" )?
 varDecl     → "var" IDENTIFIER ( "=" expression )? ";"
 statement   → printStmt | exprStmt | block | ifStmt | whileStmt | forStmt
 block       → "{" declaration* "}"
@@ -97,10 +99,10 @@ printStmt   → "print" expression ";"
 exprStmt    → expression ";"
 ifStmt      → "if" "(" expression ")" statement ( "else" statement )?
 whileStmt   → "while" "(" expression ")" statement
-forStmt     → "for" "(" ( varDecl | exprStmt | ";" )
+forStmt     → "for" "(" ( annotation* varDecl | exprStmt | ";" )
                   expression? ";"
                   expression? ")" statement
-programRepl → ( varDecl | statement | expression ";"? ) EOF
+programRepl → ( annotation* varDecl | statement | expression ";"? ) EOF
 ```
 
 Branches and loop bodies are `statement`, not `declaration`, so
@@ -169,9 +171,68 @@ output preserves embedded newlines and backslashes without display escaping;
 token output escapes control characters and backslashes. A lexical error rejects scanning before
 the parser runs.
 
+## Declaration annotations
+
+Annotations are actual `@` syntax attached to a declaration in the AST. They
+record documentation and deprecation metadata for readers and future tools.
+They differ from `//` comments, which the scanner discards.
+
+```csl
+@deprecated("Use freshFruit instead")
+@doc("Legacy fruit name")
+var oldFruit = "banana";
+@doc("Current fruit") var freshFruit = "mango";
+print oldFruit; // banana: no warning or automatic behavior
+```
+
+| Annotation | Accepted forms | Meaning |
+| --- | --- | --- |
+| `deprecated` | `@deprecated`, `@deprecated()`, `@deprecated("message")` | Marks a declaration as discouraged, optionally recording a replacement message. |
+| `doc` | `@doc("description")` | Records documentation for a declaration. |
+
+Annotations precede `var` declarations at the top level, inside blocks, and in
+`for` initializers. Multiple different annotations attach to the next declaration
+in source order. Spaces, newlines, and comments may separate them; no semicolon
+separates an annotation from its declaration. A name may appear only once on a
+declaration. Names are case-sensitive identifiers and remain ordinary identifiers
+elsewhere. Arguments are raw string literals using CSL's existing string rules;
+expressions, named arguments, multiple arguments, and trailing commas are rejected.
+Empty strings are allowed. In the line-based REPL, enter the annotations and their
+whole declaration on the same input line.
+
+Both annotations are **metadata-only**: the evaluator runs initializers normally,
+keeps ordinary scope and assignment rules, and emits no warnings. Metadata stays
+on the declaration AST; it is not stored on runtime values, inherited by later
+declarations, or available through reflection. No declaration executes before
+the entire file passes parsing.
+
+Unknown names (including `@entry` and `@GLOBAL`), duplicates, malformed arguments,
+and annotations before statements, expressions, or blocks are static errors with
+line-numbered diagnostics on stderr and file exit 65. For example:
+
+```csl
+@entry var main;                 // invalid: unknown annotation
+@doc() var fruit;                // invalid: description is required
+@deprecated print "old";        // invalid: target must be a var declaration
+@deprecated @deprecated var x;   // invalid: duplicate annotation
+```
+
+Run `./run examples/annotations.csl` for a working example (prints `banana`,
+`mango`, and `5`). Invalid examples are executable rejection fixtures in
+[`tests/annotations/`](tests/annotations/). See the
+[annotation design](docs/annotations.md) for grammar and extension boundaries.
+`--tokenize` exposes `AT` tokens; `--parse` and `--eval` retain their expression-only
+interfaces and reject declarations, including annotated ones.
+
+Function declarations and calls are not yet implemented in this checkout: `fun`
+is reserved and `fn` is an ordinary identifier. Function annotations, `@entry`
+auto-invocation, custom annotations, runtime reflection, and warning emission are
+unsupported future work. GLOBAL/LOCAL explanatory comments about variable scope
+are separate from language annotations.
+
 ## Tests
 
-Run the six laboratory suites after building:
+Run the six laboratory suites and annotation suite after building:
 
 ```sh
 ./build.sh
@@ -181,6 +242,7 @@ python3 run_tests.py tests/lab2
 python3 run_tests.py tests/lab3
 python3 run_tests.py tests/lab4
 python3 run_tests.py tests/lab5
+python3 run_tests.py tests/annotations
 cargo test
 ```
 
@@ -199,8 +261,8 @@ tests every `if` branch, truthy and falsey conditions, a missing `else`,
 `else if` chains, the dangling `else`, nested conditionals, `while` and `for`
 loops (including zero iterations, empty clauses, and loop-variable scope), and
 static and runtime errors. Untaken branches and skipped loop bodies contain
-`1 / 0`, so a test fails if they run. CI runs all six laboratory suites and
-`cargo test`.
+`1 / 0`, so a test fails if they run. CI runs all six laboratory suites, the
+annotation suite, and `cargo test`.
 
 - Jemarco Briz ([Jmbriz123](https://github.com/Jmbriz123))
 - Dejel Cyrus De Asis ([dejely](https://github.com/dejely))
@@ -400,7 +462,8 @@ rules and runtime behavior before they become usable CSL statements.
 ### CSL implementation checklist
 
 - [x] Add CSL keyword token types and scanner recognition.
-- [x] Add the `@` token for resource references such as `@auth_logs`.
+- [x] Recognize the `@` token and parse declaration annotations (`@doc`, `@deprecated`).
+  Resource references such as `@auth_logs` remain unsupported.
 - [ ] Define the CSL grammar and abstract syntax tree for rules, sources,
   capabilities, and sequences.
 - [ ] Parse CSL statements and report source locations for invalid syntax.
