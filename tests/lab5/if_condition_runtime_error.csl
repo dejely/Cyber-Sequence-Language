@@ -1,0 +1,4 @@
+// A failing condition stops the program after earlier output; no branch runs.
+print "before"; // expect: before
+if (-"text") print "then"; else print "else"; // expect runtime error: Operand must be a number.
+print "must not run";

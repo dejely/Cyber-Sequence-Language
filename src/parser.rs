@@ -94,10 +94,7 @@ impl Parser {
 
     /// The prompt accepts a declaration, print statement, block, or one expression.
     pub fn parse_repl_statement(&mut self) -> Result<Stmt, String> {
-        if !self.check(&TokenType::Print)
-            && !self.check(&TokenType::Var)
-            && !self.check(&TokenType::LeftBrace)
-        {
+        if !self.at_statement_keyword() {
             return self.parse().map(Stmt::Expression);
         }
         let statement = self.declaration()?;
@@ -127,6 +124,9 @@ impl Parser {
     }
 
     fn statement(&mut self) -> Result<Stmt, String> {
+        if self.match_token(&[TokenType::If]) {
+            return self.if_statement();
+        }
         if self.match_token(&[TokenType::LeftBrace]) {
             return self.statement_list(true).map(Stmt::Block);
         }
@@ -138,6 +138,25 @@ impl Parser {
         let expression = self.expression()?;
         self.consume(&TokenType::Semicolon, "Expect ';' after expression.")?;
         Ok(Stmt::Expression(expression))
+    }
+
+    /// The dangling `else` binds to the nearest `if`: the innermost call is the
+    /// one still parsing when `else` arrives, so it claims the branch.
+    fn if_statement(&mut self) -> Result<Stmt, String> {
+        self.consume(&TokenType::LeftParen, "Expect '(' after 'if'.")?;
+        let condition = self.expression()?;
+        self.consume(&TokenType::RightParen, "Expect ')' after if condition.")?;
+        let then_branch = Box::new(self.statement()?);
+        let else_branch = if self.match_token(&[TokenType::Else]) {
+            Some(Box::new(self.statement()?))
+        } else {
+            None
+        };
+        Ok(Stmt::If {
+            condition,
+            then_branch,
+            else_branch,
+        })
     }
 
     pub fn expression(&mut self) -> Result<Expr, String> {
@@ -277,6 +296,15 @@ impl Parser {
         Err(self.error("Expect expression."))
     }
 
+    /// Tokens that can only begin a statement. The REPL treats them as
+    /// statements rather than echoed expressions, and recovery restarts at them.
+    fn at_statement_keyword(&self) -> bool {
+        matches!(
+            self.peek().token_type(),
+            TokenType::Var | TokenType::Print | TokenType::LeftBrace | TokenType::If
+        )
+    }
+
     fn match_token(&mut self, token_types: &[TokenType]) -> bool {
         for token_type in token_types {
             if self.check(token_type) {
@@ -357,8 +385,10 @@ impl Parser {
             {
                 return;
             }
+            if self.at_statement_keyword() {
+                return;
+            }
             match self.peek().token_type() {
-                TokenType::Var | TokenType::Print | TokenType::LeftBrace => return,
                 TokenType::RightBrace => {
                     if !in_block {
                         self.advance();

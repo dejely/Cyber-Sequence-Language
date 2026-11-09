@@ -12,4 +12,10 @@ pub enum Stmt {
     },
     Print(Expr),
     Expression(Expr),
+    /// Branches are statements, so `else if` needs no extra grammar rule.
+    If {
+        condition: Expr,
+        then_branch: Box<Stmt>,
+        else_branch: Option<Box<Stmt>>,
+    },
 }

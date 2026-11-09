@@ -434,3 +434,40 @@ fn program_recovery_preserves_block_boundaries_and_statement_starters() {
         .as_bytes()
     );
 }
+
+#[test]
+fn repl_executes_conditionals_as_statements_without_echoing() {
+    let output = run(
+        &[],
+        concat!(
+            "var x = 1;\n",
+            "if (x > 0) print \"positive\"; else print \"other\";\n",
+            "if (false) print \"hidden\";\n",
+            "if (x) { x = x + 1; }\n",
+            "x\n",
+        ),
+    );
+    assert!(output.status.success());
+    assert_eq!(output.stdout, b"> > positive\n> > > 2\n> ");
+    assert!(output.stderr.is_empty());
+}
+
+#[test]
+fn program_recovery_restarts_at_if_statements() {
+    let path =
+        std::env::temp_dir().join(format!("cmsc124-if-recovery-{}.csl", std::process::id()));
+    std::fs::write(&path, "var a = 1\nif (a) print ;\nif a print 1;\n").unwrap();
+    let output = run(&[path.to_str().unwrap()], "");
+    std::fs::remove_file(path).unwrap();
+    assert_eq!(output.status.code(), Some(65));
+    assert!(output.stdout.is_empty());
+    assert_eq!(
+        output.stderr,
+        concat!(
+            "[line 2] Error at 'if': Expect ';' after variable declaration.\n",
+            "[line 2] Error at ';': Expect expression.\n",
+            "[line 3] Error at 'a': Expect '(' after 'if'.\n",
+        )
+        .as_bytes()
+    );
+}

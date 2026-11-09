@@ -1,0 +1,11 @@
+// Every path through two nested conditionals.
+var a = true;
+var b = true;
+if (a) { if (b) print "a and b"; else print "a only"; } else { if (b) print "b only"; else print "neither"; } // expect: a and b
+b = false;
+if (a) { if (b) print "a and b"; else print "a only"; } else { if (b) print "b only"; else print "neither"; } // expect: a only
+a = false;
+b = true;
+if (a) { if (b) print "a and b"; else print "a only"; } else { if (b) print "b only"; else print "neither"; } // expect: b only
+b = false;
+if (a) { if (b) print "a and b"; else print "a only"; } else { if (b) print "b only"; else print "neither"; } // expect: neither

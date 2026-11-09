@@ -1,0 +1,6 @@
+// Conditions reuse the Lab 3 rule: only false and nil are falsey.
+if (0) print "0 is truthy"; else print "0 is falsey"; // expect: 0 is truthy
+if ("") print "empty string is truthy"; else print "falsey"; // expect: empty string is truthy
+if (nil) print "truthy"; else print "nil is falsey"; // expect: nil is falsey
+if (false) print "truthy"; else print "false is falsey"; // expect: false is falsey
+if (1 == 2) print "truthy"; else print "comparison result is falsey"; // expect: comparison result is falsey

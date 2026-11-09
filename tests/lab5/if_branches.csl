@@ -1,0 +1,16 @@
+// Each branch is selected by its condition; the other branch never runs.
+if (true) print "then"; else print "else"; // expect: then
+if (false) print "then"; else print "else"; // expect: else
+
+// The untaken branch would divide by zero if it were evaluated.
+if (false) print 1 / 0; else print "skipped then"; // expect: skipped then
+if (true) print "skipped else"; else print 1 / 0; // expect: skipped else
+
+// Braced branches run every statement in order.
+var temperature = 35;
+if (temperature > 30) {
+    print "It's hot!"; // expect: It's hot!
+    print "Stay inside."; // expect: Stay inside.
+} else {
+    print "It's comfortable.";
+}

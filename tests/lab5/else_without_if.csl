@@ -1,0 +1,2 @@
+print "must not run";
+else print "orphan"; // expect error: Expect expression.
