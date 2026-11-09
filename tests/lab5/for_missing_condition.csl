@@ -1,0 +1,11 @@
+// A missing condition means true: `for (;;)` never stops on its own.
+// There is no break or return yet, so a runtime error ends this loop.
+var n = 0;
+for (;;) {
+    print n; // expect: 0
+             // expect: 1
+             // expect: 2
+    n = n + 1;
+    if (n == 3) n = n / 0;
+}
+// expect runtime error: Division by zero.

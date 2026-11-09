@@ -106,21 +106,26 @@ impl Parser {
 
     fn declaration(&mut self) -> Result<Stmt, String> {
         if self.match_token(&[TokenType::Var]) {
-            let name = self
-                .consume(&TokenType::Identifier, "Expect variable name.")?
-                .clone();
-            let initializer = if self.match_token(&[TokenType::Equal]) {
-                Some(self.expression()?)
-            } else {
-                None
-            };
-            self.consume(
-                &TokenType::Semicolon,
-                "Expect ';' after variable declaration.",
-            )?;
-            return Ok(Stmt::Var { name, initializer });
+            return self.var_declaration();
         }
         self.statement()
+    }
+
+    /// Parses the rest of `var name (= value)? ;` after the `var` keyword.
+    fn var_declaration(&mut self) -> Result<Stmt, String> {
+        let name = self
+            .consume(&TokenType::Identifier, "Expect variable name.")?
+            .clone();
+        let initializer = if self.match_token(&[TokenType::Equal]) {
+            Some(self.expression()?)
+        } else {
+            None
+        };
+        self.consume(
+            &TokenType::Semicolon,
+            "Expect ';' after variable declaration.",
+        )?;
+        Ok(Stmt::Var { name, initializer })
     }
 
     fn statement(&mut self) -> Result<Stmt, String> {
@@ -130,6 +135,9 @@ impl Parser {
         if self.match_token(&[TokenType::While]) {
             return self.while_statement();
         }
+        if self.match_token(&[TokenType::For]) {
+            return self.for_statement();
+        }
         if self.match_token(&[TokenType::LeftBrace]) {
             return self.statement_list(true).map(Stmt::Block);
         }
@@ -138,6 +146,10 @@ impl Parser {
             self.consume(&TokenType::Semicolon, "Expect ';' after value.")?;
             return Ok(Stmt::Print(expression));
         }
+        self.expression_statement()
+    }
+
+    fn expression_statement(&mut self) -> Result<Stmt, String> {
         let expression = self.expression()?;
         self.consume(&TokenType::Semicolon, "Expect ';' after expression.")?;
         Ok(Stmt::Expression(expression))
@@ -168,6 +180,52 @@ impl Parser {
         self.consume(&TokenType::RightParen, "Expect ')' after condition.")?;
         let body = Box::new(self.statement()?);
         Ok(Stmt::While { condition, body })
+    }
+
+    /// `for` is syntactic sugar, so the evaluator never sees it. The loop
+    ///
+    /// ```text
+    /// for (init; cond; incr) body
+    /// ```
+    ///
+    /// becomes `{ init; while (cond) { body; incr; } }`. The outer block keeps
+    /// a `var` initializer from leaking into the enclosing scope, and a missing
+    /// condition means `true`. The loop variable lives in that outer block, so
+    /// all iterations share one binding.
+    fn for_statement(&mut self) -> Result<Stmt, String> {
+        self.consume(&TokenType::LeftParen, "Expect '(' after 'for'.")?;
+        let initializer = if self.match_token(&[TokenType::Semicolon]) {
+            None
+        } else if self.match_token(&[TokenType::Var]) {
+            Some(self.var_declaration()?)
+        } else {
+            Some(self.expression_statement()?)
+        };
+        let condition = if self.check(&TokenType::Semicolon) {
+            Expr::Literal(Literal::Boolean(true))
+        } else {
+            self.expression()?
+        };
+        self.consume(&TokenType::Semicolon, "Expect ';' after loop condition.")?;
+        let increment = if self.check(&TokenType::RightParen) {
+            None
+        } else {
+            Some(self.expression()?)
+        };
+        self.consume(&TokenType::RightParen, "Expect ')' after for clauses.")?;
+
+        let mut body = self.statement()?;
+        if let Some(increment) = increment {
+            body = Stmt::Block(vec![body, Stmt::Expression(increment)]);
+        }
+        let mut loop_statement = Stmt::While {
+            condition,
+            body: Box::new(body),
+        };
+        if let Some(initializer) = initializer {
+            loop_statement = Stmt::Block(vec![initializer, loop_statement]);
+        }
+        Ok(loop_statement)
     }
 
     pub fn expression(&mut self) -> Result<Expr, String> {
@@ -317,6 +375,7 @@ impl Parser {
                 | TokenType::LeftBrace
                 | TokenType::If
                 | TokenType::While
+                | TokenType::For
         )
     }
 

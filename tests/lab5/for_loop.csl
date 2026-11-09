@@ -1,0 +1,10 @@
+// for (init; cond; incr) body  desugars to  { init; while (cond) { body; incr; } }
+for (var i = 0; i < 3; i = i + 1) {
+    print i; // expect: 0
+             // expect: 1
+             // expect: 2
+}
+// An unbraced body works too; the increment runs after it each pass.
+for (var j = 3; j > 0; j = j - 1) print j; // expect: 3
+                                           // expect: 2
+                                           // expect: 1

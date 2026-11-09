@@ -1,0 +1,4 @@
+// An expression initializer assigns an existing outer binding, which persists.
+var k;
+for (k = 0; k < 4; k = k + 1) {}
+print k; // expect: 4
