@@ -1,0 +1,4 @@
+// The body is a single statement, so braces are optional.
+var n = 0;
+while (n < 4) n = n + 1;
+print n; // expect: 4

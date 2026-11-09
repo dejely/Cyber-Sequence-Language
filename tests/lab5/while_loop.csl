@@ -1,0 +1,9 @@
+// The body runs while the condition is truthy; the condition is checked first.
+var i = 0;
+while (i < 3) {
+    print i; // expect: 0
+             // expect: 1
+             // expect: 2
+    i = i + 1;
+}
+print i; // expect: 3

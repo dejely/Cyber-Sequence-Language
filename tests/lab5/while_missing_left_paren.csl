@@ -1,0 +1,2 @@
+print "must not run";
+while true print "loop"; // expect error: Expect '(' after 'while'.

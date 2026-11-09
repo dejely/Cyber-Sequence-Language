@@ -127,6 +127,13 @@ impl Interpreter {
                     self.execute(else_branch)?;
                 }
             }
+            // The condition is re-evaluated before every iteration. A braced body
+            // is a block, so each iteration gets a fresh local scope.
+            Stmt::While { condition, body } => {
+                while self.evaluate(condition)?.is_truthy() {
+                    self.execute(body)?;
+                }
+            }
         }
         Ok(())
     }

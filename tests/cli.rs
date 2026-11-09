@@ -471,3 +471,28 @@ fn program_recovery_restarts_at_if_statements() {
         .as_bytes()
     );
 }
+
+#[test]
+fn repl_restores_scope_after_a_runtime_error_inside_a_loop_body() {
+    let output = run(
+        &[],
+        concat!(
+            "var i = 0;\n",
+            "while (i < 3) { var local = i; i = i + 1; if (i == 2) 1 / 0; }\n",
+            "i\n",
+            "local\n",
+            "while (i < 5) i = i + 1;\n",
+            "i\n",
+        ),
+    );
+    assert!(output.status.success());
+    assert_eq!(output.stdout, b"> > > 2\n> > > 5\n> ");
+    assert_eq!(
+        output.stderr,
+        concat!(
+            "[line 1] Runtime error at '/': Division by zero.\n",
+            "[line 1] Runtime error at 'local': Undefined variable 'local'.\n",
+        )
+        .as_bytes()
+    );
+}

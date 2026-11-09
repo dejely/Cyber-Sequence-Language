@@ -18,4 +18,9 @@ pub enum Stmt {
         then_branch: Box<Stmt>,
         else_branch: Option<Box<Stmt>>,
     },
+    /// Also the target of `for` desugaring, so the evaluator has one loop form.
+    While {
+        condition: Expr,
+        body: Box<Stmt>,
+    },
 }

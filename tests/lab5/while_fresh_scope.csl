@@ -1,0 +1,11 @@
+// A braced body is a block, so each iteration starts with fresh locals.
+// If the local survived, the second and third passes would print "stale".
+var i = 0;
+while (i < 3) {
+    var seen;
+    if (seen == nil) print "fresh"; else print "stale"; // expect: fresh
+                                                        // expect: fresh
+                                                        // expect: fresh
+    seen = true;
+    i = i + 1;
+}

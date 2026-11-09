@@ -127,6 +127,9 @@ impl Parser {
         if self.match_token(&[TokenType::If]) {
             return self.if_statement();
         }
+        if self.match_token(&[TokenType::While]) {
+            return self.while_statement();
+        }
         if self.match_token(&[TokenType::LeftBrace]) {
             return self.statement_list(true).map(Stmt::Block);
         }
@@ -157,6 +160,14 @@ impl Parser {
             then_branch,
             else_branch,
         })
+    }
+
+    fn while_statement(&mut self) -> Result<Stmt, String> {
+        self.consume(&TokenType::LeftParen, "Expect '(' after 'while'.")?;
+        let condition = self.expression()?;
+        self.consume(&TokenType::RightParen, "Expect ')' after condition.")?;
+        let body = Box::new(self.statement()?);
+        Ok(Stmt::While { condition, body })
     }
 
     pub fn expression(&mut self) -> Result<Expr, String> {
@@ -301,7 +312,11 @@ impl Parser {
     fn at_statement_keyword(&self) -> bool {
         matches!(
             self.peek().token_type(),
-            TokenType::Var | TokenType::Print | TokenType::LeftBrace | TokenType::If
+            TokenType::Var
+                | TokenType::Print
+                | TokenType::LeftBrace
+                | TokenType::If
+                | TokenType::While
         )
     }
 

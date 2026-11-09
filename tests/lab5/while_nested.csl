@@ -1,0 +1,14 @@
+// Nested loops: the inner counter resets on every outer pass.
+var row = 1;
+while (row <= 3) {
+    var col = 1;
+    var line = "";
+    while (col <= row) {
+        line = line + "*";
+        col = col + 1;
+    }
+    print line; // expect: *
+                // expect: **
+                // expect: ***
+    row = row + 1;
+}
