@@ -1,0 +1,1 @@
+@deprecated fun oldFunction; // expect error: [line 1] Error at 'fun': Annotations must precede a 'var' declaration.

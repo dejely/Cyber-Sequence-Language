@@ -1,0 +1,1 @@
+@deprecated(42) var fruit; // expect error: [line 1] Error at '42': Expect string literal annotation argument.

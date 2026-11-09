@@ -1,0 +1,1 @@
+@deprecated fn oldFunction; // expect error: [line 1] Error at 'fn': Annotations must precede a 'var' declaration.

@@ -1,0 +1,1 @@
+@deprecated var fruit = missing; // expect runtime error: [line 1] Runtime error at 'missing': Undefined variable 'missing'.

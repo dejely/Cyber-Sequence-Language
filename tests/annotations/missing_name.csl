@@ -1,0 +1,1 @@
+@ var fruit; // expect error: [line 1] Error at 'var': Expect annotation name after '@'.
