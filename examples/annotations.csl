@@ -1,0 +1,16 @@
+// Annotations are declaration metadata, not executable instructions.
+@deprecated("Use freshFruit instead")
+@doc("Legacy fruit name kept for compatibility")
+var oldFruit = "banana";
+
+@doc("Fruit offered by the stall today")
+var freshFruit = "mango";
+print oldFruit;
+print freshFruit;
+
+{
+    @deprecated
+    var oldPrice = 4;
+    @doc("Current price per fruit") var price = oldPrice + 1;
+    print price;
+}

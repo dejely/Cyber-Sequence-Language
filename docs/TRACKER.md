@@ -240,6 +240,27 @@ dead-code warnings are resolved. The release build completed without warnings.
   Lab 2 (19/19), Lab 3 (25/25), Lab 4 (35/35), and Lab 5 (33/33) passed when
   checked with `./run`. Rerun the course harness before pushing.
 
+## Declaration annotations — Issue #53
+
+- [x] Reuse the scanner's `AT`, identifier, and raw-string tokens.
+- [x] Parse `@deprecated`, `@deprecated()`, `@deprecated("message")`, and
+  `@doc("description")` as metadata on `var` declarations.
+- [x] Preserve ordered metadata on global, block-local, and `for` initializer
+  declarations; keep metadata separate from execution and scope labels.
+- [x] Reject unknown names, duplicates, invalid arguments, and unsupported targets.
+- [x] Document syntax, semantics, errors, and extension limits in
+  [annotations.md](annotations.md) and the README; add `examples/annotations.csl`.
+- [x] Add `tests/annotations/` to CI. Hosted CI has not been run for this change.
+
+### Local verification on 2026-11-09
+
+- [x] Release build, strict Clippy, and `git diff --check` pass.
+- [x] Rust tests: 4 scanner/parser tests and 35 CLI integration tests pass.
+- [x] Harness: Labs 0–5 pass (1, 20, 19, 25, 35, 33 cases); annotation suite
+  passes all 20 cases, including valid execution, rejection, and runtime errors.
+- [x] All four runnable examples pass; the annotation example prints
+  `banana`, `mango`, and `5` without diagnostics.
+
 ## Update procedure
 
 1. Add the new lab material under `docs/labs/` and link it above.
