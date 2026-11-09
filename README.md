@@ -2,14 +2,15 @@
 
 This repository implements a scanner, a recursive descent parser, and a
 tree-walking evaluator. Lab 4 Weeks 1–3 add print and expression statements,
-variable declarations, lookup, assignment, and nested lexical blocks.
+variable declarations, lookup, assignment, and nested lexical blocks. Lab 5
+Week 1 adds `if`/`else`, `while`, and `for` control flow.
 CSL monitoring operations remain deferred.
 
 ## Running the interpreter
 
 Build with `./build.sh`, then use `./run` or `./run --repl` to start the
 program REPL. Enter one expression, `print expression;`, `var name = value;`,
-or a complete `{ ... }` block per line. Expressions echo their values, print statements print once, and
+a complete `{ ... }` block, or a complete `if`, `while`, or `for` statement per line. Expressions echo their values, print statements print once, and
 declarations are silent. Variables persist across inputs and errors. It continues after scanning,
 parsing, or runtime errors. `./run --parse`
 starts an AST-printing REPL. Ctrl-D ends the session on
@@ -65,7 +66,8 @@ scope. It prints `4`, `3`, `banana`, `15`, `23`, and `5` on separate lines.
 The discount and sale variables disappear when their blocks end.
 
 The [Lab 4 brief](docs/labs/lab4.md) links the course requirements and records
-which weekly features are implemented.
+which weekly features are implemented. The [Lab 5 brief](docs/labs/lab5.md)
+does the same for control flow and functions.
 
 ## Grammar
 
@@ -89,12 +91,25 @@ expressionRepl → expression ";"? EOF
 program     → declaration* EOF
 declaration → varDecl | statement
 varDecl     → "var" IDENTIFIER ( "=" expression )? ";"
-statement   → printStmt | exprStmt | block
+statement   → printStmt | exprStmt | block | ifStmt | whileStmt | forStmt
 block       → "{" declaration* "}"
 printStmt   → "print" expression ";"
 exprStmt    → expression ";"
-programRepl → ( varDecl | printStmt | block | expression ";"? ) EOF
+ifStmt      → "if" "(" expression ")" statement ( "else" statement )?
+whileStmt   → "while" "(" expression ")" statement
+forStmt     → "for" "(" ( varDecl | exprStmt | ";" )
+                  expression? ";"
+                  expression? ")" statement
+programRepl → ( varDecl | statement | expression ";"? ) EOF
 ```
+
+Branches and loop bodies are `statement`, not `declaration`, so
+`if (x) var y = 1;` is a static error; wrap a declaration in braces.
+Because a branch can itself be an `if`, `else if` needs no extra rule. A
+dangling `else` binds to the nearest unmatched `if`: the innermost
+`if_statement` call is the one still parsing when `else` arrives.
+`for` never reaches the evaluator. The parser desugars it into blocks and
+`while`, as described under [Control flow](#control-flow-and-functions).
 
 Binary operators associate to the left: `10 - 3 - 2` prints
 `10.0 3.0 - 2.0 -`. Unary operators nest to the right: `--10` prints
@@ -134,7 +149,8 @@ reports both errors:
 [line 2] Error at ';': Expect expression.
 ```
 
-Program recovery also stops before a `var`, `print`, or `{` statement starter
+Program recovery also stops before a `var`, `print`, `{`, `if`, `while`, or
+`for` statement starter
 and preserves a closing `}` for the block that owns it. A stray `}` at top level
 is diagnosed and consumed. Errors inside nested blocks are collected in source
 order; EOF before a closing brace reports `Expect '}' after block.`. Syntax errors
@@ -145,7 +161,7 @@ bindings and evaluates to `7`. Its postfix AST is `a b 7.0 = =`. Only a bare
 identifier is an assignment target; `(a) = 7` and `1 = 7` are static errors.
 Declarations are accepted in programs and the default REPL; `--parse` and
 `--eval` retain their expression-only interfaces. Unary `+`, `and`/`or`, calls,
-arrays, and CSL rules remain outside the grammar. Chained comparisons are parsed left to right; the evaluator
+functions, `return`, `break`, arrays, and CSL rules remain outside the grammar. Chained comparisons are parsed left to right; the evaluator
 checks operand types at runtime. The scanner's existing numeric and raw-string
 rules still apply: exponent syntax is unsupported, oversized numbers are
 rejected, and large or small values may print in scientific notation. AST string
@@ -155,7 +171,7 @@ the parser runs.
 
 ## Tests
 
-Run the five laboratory suites after building:
+Run the six laboratory suites after building:
 
 ```sh
 ./build.sh
@@ -164,6 +180,7 @@ python3 run_tests.py tests/lab1
 python3 run_tests.py tests/lab2
 python3 run_tests.py tests/lab3
 python3 run_tests.py tests/lab4
+python3 run_tests.py tests/lab5
 cargo test
 ```
 
@@ -177,8 +194,13 @@ REPL continuation. Lab 4 tests plain file execution, explicit output, discarded
 values, variables, assignment order, redeclarations, nested lookup, shadowing,
 outward assignment, scope exit, and static/runtime errors. The manifest discovers
 all `.csl` fixtures, with inline expectations and no execution flag. REPL
-integration tests check scope restoration after success and errors. CI runs all five laboratory
-suites and `cargo test`.
+integration tests check scope restoration after success and errors. Lab 5
+tests every `if` branch, truthy and falsey conditions, a missing `else`,
+`else if` chains, the dangling `else`, nested conditionals, `while` and `for`
+loops (including zero iterations, empty clauses, and loop-variable scope), and
+static and runtime errors. Untaken branches and skipped loop bodies contain
+`1 / 0`, so a test fails if they run. CI runs all six laboratory suites and
+`cargo test`.
 
 - Jemarco Briz ([Jmbriz123](https://github.com/Jmbriz123))
 - Dejel Cyrus De Asis ([dejely](https://github.com/dejely))
@@ -565,8 +587,8 @@ use this same value formatting.
 `false` and `nil` are falsey. **Every other value is truthy**, including `0`,
 `-1`, and the empty string `""`. This is the Lox rule. It needs one check and
 no per-type exceptions, so `!0` is `false` and `!!""` is `true`. The rule
-lives in one function, `Value::is_truthy`, which Lab 5 `if` and `while` will
-reuse. `tests/lab3/truthiness.csl` is the executable form of this rule.
+lives in one function, `Value::is_truthy`, which Lab 5 `if`, `while`, and
+`for` conditions reuse. `tests/lab3/truthiness.csl` is the executable form of this rule.
 
 ### Operators
 
@@ -666,8 +688,30 @@ expressions inside a block stay silent unless printed.
 
 ### Control flow and functions
 
-Deferred to Lab 5, including logical return values, dangling-else behavior,
-closures, return defaults, and arity errors.
+CSL takes the imperative route: statements, mutable variables, and loops.
+
+- **Conditionals:** `if (cond) a else b` evaluates `cond` once, applies the
+  truthiness rule above, and executes only the selected branch. Without an
+  `else`, a falsey condition does nothing and execution continues. `if` is a
+  statement, so it produces no value.
+- **`while`:** the condition is evaluated before every pass, so a falsey
+  start runs the body zero times. A braced body is a block, so each pass
+  starts with fresh locals that disappear at the end of the pass.
+- **`for`:** desugared in the parser, so the evaluator has one loop. The loop
+  `for (init; cond; incr) body` becomes
+  `{ init; while (cond) { body; incr; } }`. All three clauses are optional. A
+  missing condition is `true`, so `for (;;)` runs until a runtime error stops
+  it. The outer block keeps a `var` loop variable from leaking into the
+  enclosing scope. Every iteration shares that single loop variable, like
+  JavaScript's `var` and unlike its `let`. This becomes visible only when
+  closures arrive.
+- **Errors:** a runtime error in a condition or body stops the program (file
+  exit 70). Every block still restores its enclosing scope, so the REPL keeps
+  working after a failing loop.
+
+Known limitations: there is no `break` or `continue`, and an infinite loop
+runs until the process is killed. Logical operators, functions, `return`,
+closures, native functions, and arity checking arrive in later Lab 5 weeks.
 
 ## Native functions
 
@@ -700,8 +744,9 @@ Expression modes accept variable reads and assignment, but no declarations.
 * `;` terminates statements, as in `print 42;`.
 * `()` groups expressions such as `(1 + 2)`; calls such as `inspect(host)`
   remain planned.
-* Reserved words such as `if`, `else`, `for`, `fun`, and `and` are already
-  recognized; their execution semantics remain deferred.
+* `if`, `else`, `while`, and `for` execute as described above. Reserved words
+  such as `fun`, `return`, `and`, and `or` are recognized; their execution
+  semantics remain deferred.
 
 Explicit punctuation avoids indentation-sensitive scanning. Whole-name keyword
 lookup keeps identifiers such as `variable` usable. Raw strings and line comments
@@ -726,11 +771,12 @@ inspection.
 | `src/evaluator.rs` | Evaluates expression trees, executes statements, and reports runtime errors |
 | `src/expr.rs` | Defines expression AST nodes and their printed representation |
 | `src/parser.rs` | Parses expressions and programs; recovers at statement and block boundaries |
-| `src/stmt.rs` | Defines blocks, variable declarations, print, and expression statements |
+| `src/stmt.rs` | Defines blocks, declarations, print, expression, `if`, and `while` statements |
 | `src/repl.rs` | Keeps session bindings across input lines and errors |
 | `src/main.rs` | Dispatches script execution, earlier flags, and the REPL |
 | `tests/lab2/` | Parser fixtures with inline AST and diagnostic expectations |
 | `tests/lab3/` | Evaluator fixtures with inline value and error expectations |
 | `tests/lab4/` | Script fixtures with inline output, silence, and error expectations |
+| `tests/lab5/` | Control-flow fixtures for conditionals, loops, scope, and errors |
 | `tests/cli.rs` | Checks CLI output, diagnostics, exit status, and REPL recovery |
 | `tests/cli_tests.rs` | Checks scanner regressions and default REPL compatibility |
