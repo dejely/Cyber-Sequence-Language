@@ -1,0 +1,6 @@
+// Without an else, a falsey condition runs nothing and execution continues.
+var touched = "no";
+if (false) touched = "yes";
+print touched; // expect: no
+if (true) touched = "yes";
+print touched; // expect: yes

@@ -1,0 +1,10 @@
+// Interaction: a conditional inside a loop picks a branch on every pass.
+var n = 3;
+while (n >= 0) {
+    if (n == 0) print "liftoff"; else print n;
+    n = n - 1;
+}
+// expect: 3
+// expect: 2
+// expect: 1
+// expect: liftoff

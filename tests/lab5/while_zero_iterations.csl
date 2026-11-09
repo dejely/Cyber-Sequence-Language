@@ -1,0 +1,8 @@
+// A condition that starts falsey runs the body zero times.
+// The body would divide by zero if it ever ran.
+while (false) print 1 / 0;
+var n = 10;
+while (n < 5) {
+    print 1 / 0;
+}
+print "skipped"; // expect: skipped

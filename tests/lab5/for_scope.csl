@@ -1,0 +1,6 @@
+// The desugared outer block holds the loop variable, so it shadows an outer
+// binding during the loop and the outer one returns afterward.
+var i = "outer";
+for (var i = 0; i < 2; i = i + 1) print i; // expect: 0
+                                           // expect: 1
+print i; // expect: outer

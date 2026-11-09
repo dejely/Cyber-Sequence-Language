@@ -1,0 +1,3 @@
+// An unbraced branch is a statement, not a declaration; wrap it in braces.
+print "must not run";
+if (true) var x = 1; // expect error: Expect expression.

@@ -1,0 +1,11 @@
+// A braced branch is an ordinary block: locals shadow and then disappear,
+// while assignments to outer bindings persist.
+var label = "outer";
+var visits = 0;
+if (true) {
+    var label = "branch";
+    visits = visits + 1;
+    print label; // expect: branch
+}
+print label; // expect: outer
+print visits; // expect: 1

@@ -1,0 +1,15 @@
+// An else binds to the nearest unmatched if.
+if (true)
+    if (false)
+        print "inner then";
+    else
+        print "inner else"; // expect: inner else
+
+// If the else belonged to the outer if, this would print "outer else".
+// It belongs to the inner if, which never runs, so nothing prints.
+if (false)
+    if (true)
+        print "inner then";
+    else
+        print "outer else";
+print "done"; // expect: done

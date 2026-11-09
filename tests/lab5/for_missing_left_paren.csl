@@ -1,0 +1,3 @@
+// A for loop needs its clause header before the body.
+print "must not run";
+for { print "loop"; } // expect error: Expect '(' after 'for'.

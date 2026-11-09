@@ -12,4 +12,15 @@ pub enum Stmt {
     },
     Print(Expr),
     Expression(Expr),
+    /// Branches are statements, so `else if` needs no extra grammar rule.
+    If {
+        condition: Expr,
+        then_branch: Box<Stmt>,
+        else_branch: Option<Box<Stmt>>,
+    },
+    /// Also the target of `for` desugaring, so the evaluator has one loop form.
+    While {
+        condition: Expr,
+        body: Box<Stmt>,
+    },
 }

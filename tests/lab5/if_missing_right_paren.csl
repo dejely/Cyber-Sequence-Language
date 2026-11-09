@@ -1,0 +1,2 @@
+print "must not run";
+if (true print "yes"; // expect error: Expect ')' after if condition.

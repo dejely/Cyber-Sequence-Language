@@ -1,0 +1,8 @@
+// Outer bindings updated in the body persist across iterations.
+var total = 0;
+var k = 1;
+while (k <= 5) {
+    total = total + k;
+    k = k + 1;
+}
+print total; // expect: 15

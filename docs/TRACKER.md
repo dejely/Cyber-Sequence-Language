@@ -1,8 +1,8 @@
 # CMSC 124 Progress Tracker
 
-**Last repository verification:** 2026-11-07
+**Last repository verification:** 2026-11-09
 
-**Current milestone:** Lab 4 — Week 3 nested scopes
+**Current milestone:** Lab 5 — Week 1 control flow
 
 This tracker records what the repository implements today. A checked item has
 been verified against the source and the listed test command. An unchecked item
@@ -202,6 +202,43 @@ dead-code warnings are resolved. The release build completed without warnings.
 - [x] REPL tests verify restoration after nested runtime errors and no execution
   after malformed blocks. File recovery tests verify exact ordered diagnostics.
 - [x] Existing CLI modes and stdout/stderr plus exit 65/70 contracts pass.
+
+## Lab 5 — Functions
+
+**Course reference:** [Lab 5 brief and weekly scope](labs/lab5.md)
+
+### Week 1
+
+- [x] Add `if`/`else`, `while`, and `for` to the grammar and README.
+- [x] Execute only the selected branch; reuse `Value::is_truthy` for conditions.
+- [x] Resolve the dangling `else` to the nearest `if` and test it.
+- [x] Desugar `for` into blocks and `while` in the parser.
+- [x] Add `tests/lab5/` with conditional, loop, scope, and error fixtures.
+- [x] Add Lab 5 to CI beside Labs 0–4.
+- [ ] Confirm CI is green on the Week 1 commit.
+
+### Week 2
+
+- [ ] Short-circuiting `and`/`or` with a documented result value.
+- [ ] Function declarations, calls, and parameter binding.
+- [ ] An attempt at closures (captured environments).
+
+### Week 3
+
+- [ ] Function results via `return`, higher-order use, and capture tests.
+- [ ] At least two native functions, documented in the README.
+- [ ] One shared arity check for user and native functions.
+- [ ] Non-trivial example program under `examples/`.
+- [ ] Green CI across all six folders.
+
+### Local verification on 2026-11-09
+
+- [x] `./build.sh` completed without warnings.
+- [x] `cargo test` — 31 integration tests passed.
+- [x] `cargo clippy --all-targets -- -D warnings` passed.
+- [x] Inline and sidecar expectations: Lab 0 (1/1), Lab 1 (20/20),
+  Lab 2 (19/19), Lab 3 (25/25), Lab 4 (35/35), and Lab 5 (33/33) passed when
+  checked with `./run`. Rerun the course harness before pushing.
 
 ## Update procedure
 

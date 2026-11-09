@@ -1,0 +1,9 @@
+// Initializer and increment are optional.
+var n = 0;
+for (; n < 3;) n = n + 1;
+print n; // expect: 3
+
+// Only the increment present.
+var m = 0;
+for (; m < 2; m = m + 1) print m; // expect: 0
+                                  // expect: 1

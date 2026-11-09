@@ -1,0 +1,9 @@
+// The condition is re-evaluated each pass; it fails on the third check.
+var i = 0;
+while (10 / (2 - i) > 0) {
+    print i; // expect: 0
+             // expect: 1
+    i = i + 1;
+}
+// expect runtime error: Division by zero.
+print "must not run";
