@@ -103,7 +103,10 @@ impl Interpreter {
                     .expect("a block always has an enclosing environment");
                 result?;
             }
-            Stmt::Var { name, initializer } => {
+            // Annotations describe declarations; they do not change execution.
+            Stmt::Var {
+                name, initializer, ..
+            } => {
                 // Define only after success; initializer assignments keep their own effects.
                 let value = match initializer {
                     Some(expression) => self.evaluate(expression)?,
