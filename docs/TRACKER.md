@@ -172,7 +172,7 @@ dead-code warnings are resolved. The release build completed without warnings.
 - [x] Use one environment per file or REPL session; retain bindings after errors.
 - [x] Document and test nil initializers, redeclarations, and undefined names.
 - [x] Test assignment values, right associativity, evaluation order, and invalid targets.
-- [x] Add a variable-based example under `examples/week2.csl`.
+- [x] Add a variable-based example under `examples/lab4/week2.csl`.
 
 ### Week 3
 
@@ -189,7 +189,7 @@ dead-code warnings are resolved. The release build completed without warnings.
 - [x] Course harness: Lab 0 (1/1), Lab 1 (20/20), Lab 2 (19/19),
   Lab 3 (25/25), and Lab 4 (22/22) passed locally.
 - [x] `cargo clippy --all-targets -- -D warnings` passed.
-- [x] `./run examples/week2.csl` printed `banana`, `9`, and `15`.
+- [x] `./run examples/lab4/week2.csl` printed `banana`, `9`, and `15`.
 
 ### Local verification on 2026-11-07
 
@@ -198,7 +198,7 @@ dead-code warnings are resolved. The release build completed without warnings.
 - [x] Course harness: Lab 0 (1/1), Lab 1 (20/20), Lab 2 (19/19),
   Lab 3 (25/25), and Lab 4 (35/35) passed locally.
 - [x] `cargo clippy --all-targets -- -D warnings` passed.
-- [x] `./run examples/week3.csl` printed `4`, `3`, `banana`, `15`, `23`, and `5`.
+- [x] `./run examples/lab4/week3.csl` printed `4`, `3`, `banana`, `15`, `23`, and `5`.
 - [x] REPL tests verify restoration after nested runtime errors and no execution
   after malformed blocks. File recovery tests verify exact ordered diagnostics.
 - [x] Existing CLI modes and stdout/stderr plus exit 65/70 contracts pass.
