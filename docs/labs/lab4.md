@@ -19,8 +19,8 @@ the nearest enclosing binding. Leaving a block, including through a runtime
 error, restores its parent environment. The README records grammar, recovery,
 binding time, storage lifetime, mutability, output, and undefined-name decisions.
 
-`examples/week2.csl` demonstrates variables and assignment;
-`examples/week3.csl` tracks stock and revenue with a nested discount scope.
+`examples/lab4/week2.csl` demonstrates variables and assignment;
+`examples/lab4/week3.csl` tracks stock and revenue with a nested discount scope.
 The Lab 4 harness manifest discovers all `.csl` fixtures recursively, including
 the Week 3 scope and error cases. REPL integration tests cover scope restoration
 after runtime errors and syntax recovery across block boundaries.

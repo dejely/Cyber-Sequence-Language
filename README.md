@@ -38,7 +38,7 @@ output from earlier statements remains visible. Argument and file-access errors 
 The REPL reports errors on stderr and stays open; reaching EOF exits 0 even if
 an earlier entry failed.
 
-For the Week 1 statement example, run `./run examples/week1.csl`:
+For the Week 1 statement example, run `./run examples/lab4/week1.csl`:
 
 ```csl
 print "Hello!";
@@ -50,7 +50,7 @@ This prints `Hello!` and `5` on separate lines. The last statement evaluates
 without printing. `Stmt::Print` and `Stmt::Expression` both reuse the existing
 expression evaluator; the statement kind controls whether its value is printed.
 
-For Week 2, run `./run examples/week2.csl`. It declares a fruit, stock, sales,
+For Week 2, run `./run examples/lab4/week2.csl`. It declares a fruit, stock, sales,
 and price; updates the stock; and prints `banana`, `9`, and `15`. In the REPL:
 
 ```text
@@ -61,7 +61,7 @@ and price; updates the stock; and prints `banana`, `9`, and `15`. In the REPL:
 9
 ```
 
-For Week 3, run `./run examples/week3.csl`. A banana stall records two sales,
+For Week 3, run `./run examples/lab4/week3.csl`. A banana stall records two sales,
 using a nested discount price while updating stock and revenue in the outer
 scope. It prints `4`, `3`, `banana`, `15`, `23`, and `5` on separate lines.
 The discount and sale variables disappear when their blocks end.
