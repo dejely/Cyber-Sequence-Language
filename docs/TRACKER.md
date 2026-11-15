@@ -1,8 +1,8 @@
 # CMSC 124 Progress Tracker
 
-**Last repository verification:** 2026-11-09
+**Last repository verification:** 2026-11-15
 
-**Current milestone:** Lab 5 — Week 1 control flow
+**Current milestone:** Lab 5 — Week 2 logical operators and functions
 
 This tracker records what the repository implements today. A checked item has
 been verified against the source and the listed test command. An unchecked item
@@ -219,13 +219,19 @@ dead-code warnings are resolved. The release build completed without warnings.
 
 ### Week 2
 
-- [ ] Short-circuiting `and`/`or` with a documented result value.
-- [ ] Function declarations, calls, and parameter binding.
-- [ ] An attempt at closures (captured environments).
+- [x] Short-circuiting `and`/`or` that return the deciding operand.
+- [x] Share scopes through `Rc<RefCell<Environment>>` so they can outlive blocks.
+- [x] Function declarations, postfix calls, and parameter binding.
+- [x] One `Callable` trait; callability and arity checked once in the call expression.
+- [x] Fresh scope per call, parented to the captured scope (lexical lookup).
+- [x] Closures: escaping counters, independent captures, and loop capture tested.
+- [x] Update the README grammar, semantics, and known limitations.
+- [ ] Confirm CI is green on the Week 2 commit.
 
 ### Week 3
 
-- [ ] Function results via `return`, higher-order use, and capture tests.
+- [ ] Function results via `return`, returned functions, and `makeCounter` tests.
+- [ ] A clean runtime error for deep recursion instead of a host stack overflow.
 - [ ] At least two native functions, documented in the README.
 - [ ] One shared arity check for user and native functions.
 - [ ] Non-trivial example program under `examples/`.
@@ -239,6 +245,16 @@ dead-code warnings are resolved. The release build completed without warnings.
 - [x] Inline and sidecar expectations: Lab 0 (1/1), Lab 1 (20/20),
   Lab 2 (19/19), Lab 3 (25/25), Lab 4 (35/35), and Lab 5 (33/33) passed when
   checked with `./run`. Rerun the course harness before pushing.
+
+### Local verification on 2026-11-15
+
+- [x] `./build.sh` completed without warnings.
+- [x] `cargo test` — 4 scanner/parser tests and 38 integration tests passed.
+- [x] `cargo clippy --all-targets -- -D warnings` passed.
+- [x] Course harness: Lab 0 (1/1), Lab 1 (20/20), Lab 2 (19/19),
+  Lab 3 (25/25), Lab 4 (35/35), Lab 5 (70/70), and annotations (20/20)
+  passed locally.
+- [x] Annotations stay `var`-only: `@deprecated fun f` is still rejected.
 
 ## Declaration annotations — Issue #53
 
