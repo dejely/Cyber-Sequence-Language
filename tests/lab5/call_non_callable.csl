@@ -1,0 +1,3 @@
+// Only functions can be called; the error points at the closing parenthesis.
+var tally = 3;
+tally(); // expect runtime error: Can only call functions.

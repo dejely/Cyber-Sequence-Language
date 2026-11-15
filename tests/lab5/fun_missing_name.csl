@@ -1,0 +1,2 @@
+print "must not run";
+fun (a) {} // expect error: Expect function name.

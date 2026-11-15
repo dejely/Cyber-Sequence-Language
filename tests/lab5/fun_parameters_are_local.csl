@@ -1,0 +1,18 @@
+// Parameters and locals live in the call's own scope and shadow globals.
+var x = "global";
+fun show(x) {
+    var y = "local";
+    print x;
+    print y;
+}
+show("param"); // expect: param
+               // expect: local
+print x;       // expect: global
+// A body can still assign an outer binding it does not shadow.
+var total = 0;
+fun add(n) {
+    total = total + n;
+}
+add(2);
+add(3);
+print total; // expect: 5

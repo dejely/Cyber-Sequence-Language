@@ -5,6 +5,7 @@ use std::rc::Rc;
 
 use crate::environment::{Environment, SharedEnvironment};
 use crate::expr::Expr;
+use crate::function::Function;
 use crate::stmt::Stmt;
 use crate::token::{Literal, Token, TokenType};
 use crate::value::Value;
@@ -17,7 +18,7 @@ pub struct RuntimeError {
 }
 
 impl RuntimeError {
-    fn new(operator: &Token, message: impl Into<String>) -> Self {
+    pub(crate) fn new(operator: &Token, message: impl Into<String>) -> Self {
         Self {
             operator: operator.clone(),
             message: message.into(),
@@ -61,7 +62,8 @@ impl Interpreter {
                 if !self
                     .environment
                     .borrow_mut()
-                    .assign(name.lexeme(), value.clone()) {
+                    .assign(name.lexeme(), value.clone())
+                {
                     return Err(RuntimeError::new(
                         name,
                         format!("Undefined variable '{}'.", name.lexeme()),
@@ -87,6 +89,33 @@ impl Interpreter {
                 let left = self.evaluate(left)?;
                 let right = self.evaluate(right)?;
                 binary(operator, left, right)
+            }
+            // Callee first, then arguments left to right, all in the caller's
+            // scope. Both checks live here, so every kind of callable gets them.
+            Expr::Call {
+                callee,
+                paren,
+                arguments,
+            } => {
+                let callee = self.evaluate(callee)?;
+                let arguments = arguments
+                    .iter()
+                    .map(|argument| self.evaluate(argument))
+                    .collect::<Result<Vec<_>, _>>()?;
+                let Value::Callable(function) = callee else {
+                    return Err(RuntimeError::new(paren, "Can only call functions."));
+                };
+                if arguments.len() != function.arity() {
+                    return Err(RuntimeError::new(
+                        paren,
+                        format!(
+                            "Expected {} arguments but got {}.",
+                            function.arity(),
+                            arguments.len()
+                        ),
+                    ));
+                }
+                function.call(self, arguments)
             }
             // Short-circuiting is semantics, not an optimization: the right
             // operand runs only when the left one cannot decide the result.
@@ -143,6 +172,15 @@ impl Interpreter {
                 } else if let Some(else_branch) = else_branch {
                     self.execute(else_branch)?;
                 }
+            }
+            // The function captures the scope it is declared in. Its name is
+            // bound in that same scope, so the body can call itself.
+            Stmt::Function(declaration) => {
+                let function = Function::new(Rc::clone(declaration), Rc::clone(&self.environment));
+                self.environment.borrow_mut().define(
+                    declaration.name.lexeme(),
+                    Value::Callable(Rc::new(function)),
+                );
             }
             // The condition is re-evaluated before every iteration. A braced body
             // is a block, so each iteration gets a fresh local scope.

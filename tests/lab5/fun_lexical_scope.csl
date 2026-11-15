@@ -1,0 +1,19 @@
+// A name in a body means what it meant where the function was written, not
+// what it means in whoever called it. Dynamic scope would print "Go away".
+var greeting = "Hello";
+fun greet() {
+    print greeting;
+}
+fun rude() {
+    var greeting = "Go away";
+    greet();
+}
+rude(); // expect: Hello
+// A caller's parameter with the same name is invisible too.
+fun polite(greeting) {
+    greet();
+}
+polite("Good day"); // expect: Hello
+// Lookup happens at call time, so a later assignment to the global is seen.
+greeting = "Hi";
+rude(); // expect: Hi

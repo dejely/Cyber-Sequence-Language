@@ -1,0 +1,8 @@
+// A function declared in a block is local to that block, like a variable.
+{
+    fun inner() {
+        print "inner";
+    }
+    inner(); // expect: inner
+}
+inner(); // expect runtime error: Undefined variable 'inner'.

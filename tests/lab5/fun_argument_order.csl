@@ -1,0 +1,15 @@
+// The callee and then each argument evaluate left to right, in the caller's scope,
+// before the body runs.
+var log = "";
+fun show(a, b) {
+    print log;
+}
+show(log = log + "a", log = log + "b"); // expect: ab
+// Arguments are copies of values: assigning a parameter leaves the caller's
+// variable alone.
+var stock = 5;
+fun drain(stock) {
+    stock = 0;
+}
+drain(stock);
+print stock; // expect: 5

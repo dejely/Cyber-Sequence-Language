@@ -1,0 +1,17 @@
+// A function is a value bound to its name, like a number or a string.
+fun shout(word) {
+    print word + "!";
+}
+print shout; // expect: <fn shout>
+var alias = shout;
+alias("hey"); // expect: hey!
+print alias;  // expect: <fn shout>
+// Functions compare by identity.
+print alias == shout; // expect: true
+fun other(word) {
+    print word + "!";
+}
+print other == shout; // expect: false
+print shout == "shout"; // expect: false
+// Functions are truthy.
+if (shout) print "truthy"; // expect: truthy

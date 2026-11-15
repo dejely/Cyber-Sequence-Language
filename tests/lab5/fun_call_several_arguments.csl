@@ -1,0 +1,14 @@
+// Arguments bind to parameters by position.
+fun describe(item, amount, unit) {
+    print item;
+    print amount;
+    print unit;
+}
+describe("rice", 3, "kg"); // expect: rice
+                           // expect: 3
+                           // expect: kg
+fun minus(a, b) {
+    print a - b;
+}
+minus(10, 4); // expect: 6
+minus(4, 10); // expect: -6

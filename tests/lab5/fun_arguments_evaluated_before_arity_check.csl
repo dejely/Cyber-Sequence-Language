@@ -1,0 +1,4 @@
+// Arguments run before the arity check: the undefined name fails first,
+// even though the argument count is also wrong.
+fun none() {}
+none(missing = 1); // expect runtime error: Undefined variable 'missing'.

@@ -1,0 +1,8 @@
+// Without `return` (Week 3), a call produces nil once its body finishes.
+fun work() {
+    print "working";
+}
+print work(); // expect: working
+              // expect: nil
+fun empty() {}
+print empty(); // expect: nil

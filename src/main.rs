@@ -3,6 +3,7 @@
 mod environment;
 mod evaluator;
 mod expr;
+mod function;
 mod parser;
 mod repl;
 mod scanner;

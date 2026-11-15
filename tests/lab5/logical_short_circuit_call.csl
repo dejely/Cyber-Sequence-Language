@@ -1,0 +1,8 @@
+// The skipped operand is a call with a visible side effect.
+fun sideEffect() {
+    print "evaluated";
+}
+false and sideEffect(); // right side must not run
+true or sideEffect();   // right side must not run
+print "done";           // expect: done
+true and sideEffect();  // expect: evaluated

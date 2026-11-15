@@ -1,7 +1,9 @@
 //! Recursive descent parser for expressions and programs, with semicolon recovery.
 
+use std::rc::Rc;
+
 use crate::expr::Expr;
-use crate::stmt::{Annotation, Stmt};
+use crate::stmt::{Annotation, FunctionDecl, Stmt};
 use crate::token::{Literal, Token, TokenType};
 
 pub struct Parser {
@@ -109,8 +111,12 @@ impl Parser {
         if self.match_token(&[TokenType::Var]) {
             return self.var_declaration(annotations);
         }
+        // Annotations are `var`-only, so this check runs before `fun` is tried.
         if !annotations.is_empty() {
             return Err(self.error("Annotations must precede a 'var' declaration."));
+        }
+        if self.match_token(&[TokenType::Fun]) {
+            return self.function_declaration();
         }
         self.statement()
     }
@@ -180,6 +186,39 @@ impl Parser {
             name,
             initializer,
         })
+    }
+
+    /// Parses the rest of `fun name(params) { body }` after the `fun` keyword.
+    fn function_declaration(&mut self) -> Result<Stmt, String> {
+        let name = self
+            .consume(&TokenType::Identifier, "Expect function name.")?
+            .clone();
+        self.consume(&TokenType::LeftParen, "Expect '(' after function name.")?;
+        let mut params: Vec<Token> = Vec::new();
+        if !self.check(&TokenType::RightParen) {
+            loop {
+                let param = self
+                    .consume(&TokenType::Identifier, "Expect parameter name.")?
+                    .clone();
+                // Parameters share one scope, so a repeat would silently
+                // replace an argument; reject it before anything runs.
+                if params.iter().any(|seen| seen.lexeme() == param.lexeme()) {
+                    return Err(format!(
+                        "[line {}] Error at '{}': Duplicate parameter name.",
+                        param.line(),
+                        param.lexeme()
+                    ));
+                }
+                params.push(param);
+                if !self.match_token(&[TokenType::Comma]) {
+                    break;
+                }
+            }
+        }
+        self.consume(&TokenType::RightParen, "Expect ')' after parameters.")?;
+        self.consume(&TokenType::LeftBrace, "Expect '{' before function body.")?;
+        let body = self.statement_list(true)?;
+        Ok(Stmt::Function(Rc::new(FunctionDecl { name, params, body })))
     }
 
     fn statement(&mut self) -> Result<Stmt, String> {
@@ -415,7 +454,37 @@ impl Parser {
                 right: Box::new(right),
             });
         }
-        self.primary()
+        self.call()
+    }
+
+    /// `call → primary ( "(" arguments? ")" )*`. Each `(` wraps whatever has
+    /// been parsed so far, so `f(1)(2)` calls the result of `f(1)`.
+    fn call(&mut self) -> Result<Expr, String> {
+        let mut expr = self.primary()?;
+        while self.match_token(&[TokenType::LeftParen]) {
+            expr = self.finish_call(expr)?;
+        }
+        Ok(expr)
+    }
+
+    fn finish_call(&mut self, callee: Expr) -> Result<Expr, String> {
+        let mut arguments = Vec::new();
+        if !self.check(&TokenType::RightParen) {
+            loop {
+                arguments.push(self.expression()?);
+                if !self.match_token(&[TokenType::Comma]) {
+                    break;
+                }
+            }
+        }
+        let paren = self
+            .consume(&TokenType::RightParen, "Expect ')' after arguments.")?
+            .clone();
+        Ok(Expr::Call {
+            callee: Box::new(callee),
+            paren,
+            arguments,
+        })
     }
 
     pub fn primary(&mut self) -> Result<Expr, String> {
@@ -455,6 +524,7 @@ impl Parser {
             self.peek().token_type(),
             TokenType::At
                 | TokenType::Var
+                | TokenType::Fun
                 | TokenType::Print
                 | TokenType::LeftBrace
                 | TokenType::If

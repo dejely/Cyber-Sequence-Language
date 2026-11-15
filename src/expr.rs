@@ -22,6 +22,13 @@ pub enum Expr {
         right: Box<Expr>,
     },
     Grouping(Box<Expr>),
+    /// Calling is a postfix operator on any expression, not only on names.
+    Call {
+        callee: Box<Expr>,
+        /// The closing parenthesis locates runtime errors about the call.
+        paren: Token,
+        arguments: Vec<Expr>,
+    },
     /// Kept apart from `Binary` because the right operand may never run.
     Logical {
         left: Box<Expr>,
@@ -48,6 +55,15 @@ impl fmt::Display for Expr {
                 write!(f, "{left} {right} {}", operator.lexeme())
             }
             Self::Grouping(expression) => write!(f, "{expression}"),
+            Self::Call {
+                callee, arguments, ..
+            } => {
+                write!(f, "{callee}")?;
+                for argument in arguments {
+                    write!(f, " {argument}")?;
+                }
+                write!(f, " call/{}", arguments.len())
+            }
             Self::Logical {
                 left,
                 operator,
