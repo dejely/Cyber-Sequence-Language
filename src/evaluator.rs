@@ -1,8 +1,9 @@
 //! Tree-walking evaluator: a post-order match over expression nodes.
 
 use std::fmt;
+use std::rc::Rc;
 
-use crate::environment::Environment;
+use crate::environment::{Environment, SharedEnvironment};
 use crate::expr::Expr;
 use crate::stmt::Stmt;
 use crate::token::{Literal, Token, TokenType};
@@ -39,7 +40,7 @@ impl fmt::Display for RuntimeError {
 /// Owns the bindings shared by every statement and expression in a session.
 #[derive(Default)]
 pub struct Interpreter {
-    environment: Environment,
+    environment: SharedEnvironment,
 }
 
 impl Interpreter {
@@ -52,12 +53,15 @@ impl Interpreter {
                 Literal::Boolean(value) => Value::Boolean(*value),
                 Literal::Null => Value::Nil,
             }),
-            Expr::Variable(name) => self.environment.get(name.lexeme()).ok_or_else(|| {
+            Expr::Variable(name) => self.environment.borrow().get(name.lexeme()).ok_or_else(|| {
                 RuntimeError::new(name, format!("Undefined variable '{}'.", name.lexeme()))
             }),
             Expr::Assign { name, value } => {
                 let value = self.evaluate(value)?;
-                if !self.environment.assign(name.lexeme(), value.clone()) {
+                if !self
+                    .environment
+                    .borrow_mut()
+                    .assign(name.lexeme(), value.clone()) {
                     return Err(RuntimeError::new(
                         name,
                         format!("Undefined variable '{}'.", name.lexeme()),
@@ -110,17 +114,8 @@ impl Interpreter {
     pub fn execute(&mut self, statement: &Stmt) -> Result<(), RuntimeError> {
         match statement {
             Stmt::Block(statements) => {
-                let enclosing = std::mem::take(&mut self.environment);
-                self.environment = Environment::enclosed(enclosing);
-                // Save the result before propagating errors so every block restores
-                // its parent, including each level of a failing nested block.
-                let result = statements
-                    .iter()
-                    .try_for_each(|statement| self.execute(statement));
-                self.environment = std::mem::take(&mut self.environment)
-                    .into_enclosing()
-                    .expect("a block always has an enclosing environment");
-                result?;
+                let scope = Environment::enclosed(Rc::clone(&self.environment));
+                self.execute_block(statements, scope)?;
             }
             // Annotations describe declarations; they do not change execution.
             Stmt::Var {
@@ -131,7 +126,7 @@ impl Interpreter {
                     Some(expression) => self.evaluate(expression)?,
                     None => Value::Nil,
                 };
-                self.environment.define(name.lexeme(), value);
+                self.environment.borrow_mut().define(name.lexeme(), value);
             }
             Stmt::Print(expression) => println!("{}", self.evaluate(expression)?),
             Stmt::Expression(expression) => {
@@ -158,6 +153,22 @@ impl Interpreter {
             }
         }
         Ok(())
+    }
+
+    /// Runs `statements` in `scope`, then reinstates the previous scope.
+    /// The result is saved before propagating errors so the caller's scope
+    /// comes back on success and on a runtime error, at every nesting level.
+    pub fn execute_block(
+        &mut self,
+        statements: &[Stmt],
+        scope: SharedEnvironment,
+    ) -> Result<(), RuntimeError> {
+        let previous = std::mem::replace(&mut self.environment, scope);
+        let result = statements
+            .iter()
+            .try_for_each(|statement| self.execute(statement));
+        self.environment = previous;
+        result
     }
 }
 
