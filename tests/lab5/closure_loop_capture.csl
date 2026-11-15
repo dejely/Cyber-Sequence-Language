@@ -1,0 +1,27 @@
+// `for` desugars to one loop variable shared by every iteration, so closures
+// made in different iterations all see its final value (like JavaScript `var`).
+var first;
+var second;
+for (var i = 0; i < 2; i = i + 1) {
+    fun show() {
+        print i;
+    }
+    if (i == 0) first = show; else second = show;
+}
+first();  // expect: 2
+second(); // expect: 2
+// A `var` inside the body is fresh on every pass, so copying the loop value
+// into it gives each closure its own binding (like JavaScript `let`).
+var a;
+var b;
+var j = 0;
+while (j < 2) {
+    var copy = j;
+    fun show() {
+        print copy;
+    }
+    if (j == 0) a = show; else b = show;
+    j = j + 1;
+}
+a(); // expect: 0
+b(); // expect: 1

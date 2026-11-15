@@ -1,0 +1,15 @@
+// A function can outlive the block it was declared in. It sees the block's
+// final value of `status`, because it captured the binding, not a snapshot.
+var report;
+{
+    var status = "starting";
+    fun current() {
+        print status;
+    }
+    report = current;
+    status = "running";
+}
+report(); // expect: running
+report(); // expect: running
+// The binding is still invisible to code outside the block.
+print status; // expect runtime error: Undefined variable 'status'.
