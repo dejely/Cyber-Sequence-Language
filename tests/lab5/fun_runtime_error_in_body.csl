@@ -1,0 +1,7 @@
+// A runtime error inside a body stops the program at the failing operator.
+fun divide(a, b) {
+    print a / b;
+}
+divide(6, 3); // expect: 2
+divide(1, 0); // expect runtime error: Division by zero.
+print "must not run";

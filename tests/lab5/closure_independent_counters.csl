@@ -1,0 +1,20 @@
+// Each factory call creates a fresh scope, so each counter keeps its own
+// state. A scope shared between calls would make `other` print 3.
+var latest;
+fun makeCounter() {
+    var tally = 0;
+    fun increment() {
+        tally = tally + 1;
+        print tally;
+    }
+    latest = increment;
+}
+makeCounter();
+var counter = latest;
+makeCounter();
+var other = latest;
+counter(); // expect: 1
+counter(); // expect: 2
+other();   // expect: 1
+counter(); // expect: 3
+other();   // expect: 2

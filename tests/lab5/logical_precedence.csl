@@ -1,0 +1,11 @@
+// `and` binds tighter than `or`; both bind looser than equality.
+print true or false and false;   // expect: true
+print (true or false) and false; // expect: false
+print 1 == 1 and 2 == 2;         // expect: true
+print false or 1 < 2;            // expect: true
+// Both operators associate left; the first truthy operand ends a chain of `or`.
+print nil or false or "third";   // expect: third
+print 1 and 2 and 3;             // expect: 3
+// Assignment binds looser still, so the whole `or` is stored.
+var picked = nil or "fallback";
+print picked;                    // expect: fallback

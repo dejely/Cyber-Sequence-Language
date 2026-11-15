@@ -514,6 +514,47 @@ fn annotated_programs_preserve_execution_and_runtime_errors() {
 }
 
 #[test]
+fn repl_declares_functions_silently_and_echoes_call_results() {
+    let output = run(
+        &[],
+        concat!(
+            "fun greet(name) { print \"hi \" + name; }\n",
+            "greet(\"ana\")\n",
+            "greet\n",
+        ),
+    );
+    assert!(output.status.success());
+    assert_eq!(output.stdout, b"> > hi ana\nnil\n> <fn greet>\n> ");
+    assert!(output.stderr.is_empty());
+}
+
+#[test]
+fn repl_restores_the_caller_scope_after_a_runtime_error_inside_a_call() {
+    let output = run(
+        &[],
+        concat!(
+            "var x = \"global\";\n",
+            "fun fail(x) { var local = 1; print x / 0; }\n",
+            "fail(4)\n",
+            "x\n",
+            "local\n",
+            "fail(1, 2)\n",
+            "x\n",
+        ),
+    );
+    assert!(output.status.success());
+    assert_eq!(output.stdout, b"> > > > global\n> > > global\n> ");
+    assert_eq!(
+        String::from_utf8(output.stderr).unwrap(),
+        concat!(
+            "[line 1] Runtime error at '/': Division by zero.\n",
+            "[line 1] Runtime error at 'local': Undefined variable 'local'.\n",
+            "[line 1] Runtime error at ')': Expected 1 arguments but got 2.\n",
+        ),
+    );
+}
+
+#[test]
 fn annotation_errors_reject_the_entire_file_before_execution() {
     let path = std::env::temp_dir().join(format!("cmsc124-annotations-{}.csl", std::process::id()));
     std::fs::write(&path, "print \"must not run\";\n@entry var main;").unwrap();
@@ -573,4 +614,14 @@ fn annotations_remain_declarations_in_expression_only_modes() {
                 .contains("Error at '@': Expect expression.")
         );
     }
+}
+
+#[test]
+fn parse_mode_prints_calls_and_logical_operators_in_postfix() {
+    let output = run(&["--parse"], "f(1)(2, a or b and c)\nf()\n");
+    assert!(output.status.success());
+    assert_eq!(
+        output.stdout,
+        b"> f 1.0 call/1 2.0 a b c and or call/2\n> f call/0\n> "
+    );
 }

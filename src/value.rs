@@ -1,4 +1,7 @@
 use std::fmt;
+use std::rc::Rc;
+
+use crate::function::Callable;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Value {
@@ -6,6 +9,8 @@ pub enum Value {
     String(String),
     Boolean(bool),
     Nil,
+    /// Functions are ordinary values: storable, passable, and returnable.
+    Callable(Rc<dyn Callable>),
 }
 
 impl Value {
@@ -21,6 +26,7 @@ impl fmt::Display for Value {
             Self::String(value) => write!(f, "{value}"),
             Self::Boolean(value) => write!(f, "{value}"),
             Self::Nil => write!(f, "nil"),
+            Self::Callable(function) => write!(f, "{function}"),
         }
     }
 }

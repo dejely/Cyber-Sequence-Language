@@ -3,7 +3,8 @@
 This repository implements a scanner, a recursive descent parser, and a
 tree-walking evaluator. Lab 4 Weeks 1–3 add print and expression statements,
 variable declarations, lookup, assignment, and nested lexical blocks. Lab 5
-Week 1 adds `if`/`else`, `while`, and `for` control flow.
+Week 1 adds `if`/`else`, `while`, and `for` control flow. Week 2 adds
+short-circuiting `and`/`or`, function declarations, calls, and closures.
 Declaration annotations add validated metadata to `var` declarations.
 CSL monitoring operations remain deferred.
 
@@ -11,8 +12,9 @@ CSL monitoring operations remain deferred.
 
 Build with `./build.sh`, then use `./run` or `./run --repl` to start the
 program REPL. Enter one expression, `print expression;`, `var name = value;`,
-a complete `{ ... }` block, or a complete `if`, `while`, or `for` statement per line. Expressions echo their values, print statements print once, and
-declarations are silent. Variables persist across inputs and errors. It continues after scanning,
+a complete `{ ... }` block, a complete `if`, `while`, or `for` statement, or a
+complete `fun` declaration per line. Expressions echo their values (a call
+echoes its result), print statements print once, and declarations are silent. Variables persist across inputs and errors. It continues after scanning,
 parsing, or runtime errors. `./run --parse`
 starts an AST-printing REPL. Ctrl-D ends the session on
 Unix. Each entered line starts at source line 1, and the `> ` prompt is printed
@@ -78,20 +80,26 @@ primary expressions; assignment has the lowest precedence:
 
 ```text
 expression → assignment
-assignment → IDENTIFIER "=" assignment | equality
+assignment → IDENTIFIER "=" assignment | logicOr
+logicOr    → logicAnd ( "or" logicAnd )*
+logicAnd   → equality ( "and" equality )*
 equality   → comparison ( ( "!=" | "==" ) comparison )*
 comparison → term ( ( ">" | ">=" | "<" | "<=" ) term )*
 term       → factor ( ( "-" | "+" ) factor )*
 factor     → unary ( ( "/" | "*" ) unary )*
-unary      → ( "!" | "-" ) unary | primary
+unary      → ( "!" | "-" ) unary | call
+call       → primary ( "(" arguments? ")" )*
+arguments  → expression ( "," expression )*
 primary    → NUMBER | STRING | "true" | "false" | "nil" | IDENTIFIER | "(" expression ")"
 
 expressionFile → expression ( ";" expression )* ";"? EOF
 expressionRepl → expression ";"? EOF
 
 program     → declaration* EOF
-declaration → annotation* varDecl | statement
+declaration → annotation* varDecl | funDecl | statement
 annotation  → "@" IDENTIFIER ( "(" STRING? ")" )?
+funDecl     → "fun" IDENTIFIER "(" parameters? ")" block
+parameters  → IDENTIFIER ( "," IDENTIFIER )*
 varDecl     → "var" IDENTIFIER ( "=" expression )? ";"
 statement   → printStmt | exprStmt | block | ifStmt | whileStmt | forStmt
 block       → "{" declaration* "}"
@@ -102,7 +110,7 @@ whileStmt   → "while" "(" expression ")" statement
 forStmt     → "for" "(" ( annotation* varDecl | exprStmt | ";" )
                   expression? ";"
                   expression? ")" statement
-programRepl → ( annotation* varDecl | statement | expression ";"? ) EOF
+programRepl → ( annotation* varDecl | funDecl | statement | expression ";"? ) EOF
 ```
 
 Branches and loop bodies are `statement`, not `declaration`, so
@@ -112,6 +120,15 @@ dangling `else` binds to the nearest unmatched `if`: the innermost
 `if_statement` call is the one still parsing when `else` arrives.
 `for` never reaches the evaluator. The parser desugars it into blocks and
 `while`, as described under [Control flow](#control-flow-and-functions).
+
+A call is a postfix operator applied to whatever expression precedes the `(`,
+not "a name followed by parentheses". So `f(1)(2)` calls the result of
+`f(1)`, and `(f)(1)` is the same call as `f(1)`. A function body is a block, so
+`fun f() print 1;` is a static error. Repeated parameter names, as in
+`fun f(a, a) {}`, are rejected statically. In postfix AST output a call prints
+its callee, its arguments, and then `call/N`, where N is the argument count:
+`f(1)(2, a or b)` prints `f 1.0 call/1 2.0 a b or call/2`. Logical operators
+print like binary ones: `a or b and c` prints `a b c and or`.
 
 Binary operators associate to the left: `10 - 3 - 2` prints
 `10.0 3.0 - 2.0 -`. Unary operators nest to the right: `--10` prints
@@ -151,8 +168,8 @@ reports both errors:
 [line 2] Error at ';': Expect expression.
 ```
 
-Program recovery also stops before a `var`, `print`, `{`, `if`, `while`, or
-`for` statement starter
+Program recovery also stops before an `@`, `fun`, `var`, `print`, `{`, `if`,
+`while`, or `for` statement starter
 and preserves a closing `}` for the block that owns it. A stray `}` at top level
 is diagnosed and consumed. Errors inside nested blocks are collected in source
 order; EOF before a closing brace reports `Expect '}' after block.`. Syntax errors
@@ -162,8 +179,8 @@ Assignment associates to the right: `a = b = 7` stores `7` in both existing
 bindings and evaluates to `7`. Its postfix AST is `a b 7.0 = =`. Only a bare
 identifier is an assignment target; `(a) = 7` and `1 = 7` are static errors.
 Declarations are accepted in programs and the default REPL; `--parse` and
-`--eval` retain their expression-only interfaces. Unary `+`, `and`/`or`, calls,
-functions, `return`, `break`, arrays, and CSL rules remain outside the grammar. Chained comparisons are parsed left to right; the evaluator
+`--eval` retain their expression-only interfaces. Unary `+`, `return` (Week 3),
+`break`, anonymous functions, arrays, and CSL rules remain outside the grammar. Chained comparisons are parsed left to right; the evaluator
 checks operand types at runtime. The scanner's existing numeric and raw-string
 rules still apply: exponent syntax is unsupported, oversized numbers are
 rejected, and large or small values may print in scientific notation. AST string
@@ -224,8 +241,9 @@ Run `./run examples/annotations.csl` for a working example (prints `banana`,
 `--tokenize` exposes `AT` tokens; `--parse` and `--eval` retain their expression-only
 interfaces and reject declarations, including annotated ones.
 
-Function declarations and calls are not yet implemented in this checkout: `fun`
-is reserved and `fn` is an ordinary identifier. Function annotations, `@entry`
+Functions exist since Lab 5 Week 2, but annotations stay `var`-only:
+`@deprecated fun f() {}` is rejected with `Annotations must precede a 'var'
+declaration.`, and `fn` is an ordinary identifier. Function annotations, `@entry`
 auto-invocation, custom annotations, runtime reflection, and warning emission are
 unsupported future work. GLOBAL/LOCAL explanatory comments about variable scope
 are separate from language annotations.
@@ -261,8 +279,15 @@ tests every `if` branch, truthy and falsey conditions, a missing `else`,
 `else if` chains, the dangling `else`, nested conditionals, `while` and `for`
 loops (including zero iterations, empty clauses, and loop-variable scope), and
 static and runtime errors. Untaken branches and skipped loop bodies contain
-`1 / 0`, so a test fails if they run. CI runs all six laboratory suites, the
-annotation suite, and `cargo test`.
+`1 / 0`, so a test fails if they run. Week 2 adds `and`/`or` result values,
+precedence, and short-circuiting (a skipped operand divides by zero, assigns,
+or calls a printing function); calls with zero and several arguments, argument
+order, function values, local parameters, fresh per-call scope, the
+lexical-scope distinguishing test, recursion, mutual recursion, functions as
+arguments, and arity, non-callable, and malformed-declaration errors. Closure
+fixtures show escaping counters with independent state, captured parameters,
+shared scopes, a closure outliving its block, and loop capture. CI runs all six
+laboratory suites, the annotation suite, and `cargo test`.
 
 - Jemarco Briz ([Jmbriz123](https://github.com/Jmbriz123))
 - Dejel Cyrus De Asis ([dejely](https://github.com/dejely))
@@ -384,8 +409,9 @@ The remaining keywords are reserved for future forms.
 
 The scanner emits operator tokens; the parser applies the precedence and
 associativity below. Levels increase from equality (1) to unary (5); literals
-and grouping are primary expressions. Assignment and logical conjunction or
-disjunction are recognized only by the scanner.
+and grouping are primary expressions. `or` and `and` sit below equality, and
+assignment sits below both. A call's `(` binds tighter than unary operators,
+so `-f(1)` negates the call's result.
 
 | Operator | Token type | Category | Operands | Associativity | Precedence |
 | --- | --- | --- | --- | --- | --- |
@@ -401,8 +427,8 @@ disjunction are recognized only by the scanner.
 | `>` | `GREATER` | Comparison | Binary | Left | 2 |
 | `>=` | `GREATER_EQUAL` | Comparison | Binary | Left | 2 |
 | `!` | `BANG` | Logical negation | Unary | Right | 5 |
-| `and` | `AND` | Logical conjunction | Binary | Deferred | Deferred |
-| `or` | `OR` | Logical disjunction | Binary | Deferred | Deferred |
+| `and` | `AND` | Logical conjunction (short-circuit) | Binary | Left | Below 1, above `or` |
+| `or` | `OR` | Logical disjunction (short-circuit) | Binary | Left | Below `and` |
 
 Longest valid matches win: `!=` emits one `BANG_EQUAL`, and `===` emits
 `EQUAL_EQUAL` followed by `EQUAL`. A single `/` is an operator unless followed
@@ -611,8 +637,12 @@ CSL is dynamically typed, but every Rust variable has one static type. Runtime
 values therefore use a tagged union, the Rust enum `Value` in `src/value.rs`:
 
 ```rust
-pub enum Value { Number(f64), String(String), Boolean(bool), Nil }
+pub enum Value { Number(f64), String(String), Boolean(bool), Nil, Callable(Rc<dyn Callable>) }
 ```
+
+Lab 5 adds `Callable`: every function value is a shared pointer to something
+implementing the `Callable` trait in `src/function.rs`. User functions are one
+implementation; the Week 3 native functions will be another.
 
 - **Uniform storage:** every evaluator function returns `Value`, whatever the
   CSL type turns out to be.
@@ -640,6 +670,7 @@ two modes cannot format differently. `--parse` still prints ASTs.
 | String | Contents, no quotes | `"hi" + " there"` → `hi there` |
 | Boolean | `true` / `false` | `1 < 2` → `true` |
 | Nil | `nil` | `nil` → `nil` |
+| Function | `<fn name>` | `fun f() {}` then `f` → `<fn f>` |
 
 Large integral numbers print every digit (`1000000 * 1000000` →
 `1000000000000`); there is no exponent notation. Script `print` statements
@@ -740,7 +771,9 @@ runtime. Global storage lasts for the file execution or REPL session; local
 storage lasts for that block's execution. Local storage is stack-dynamic in the
 guest language: a declaration creates storage, and block exit releases it, even
 though the Rust maps and enclosing links use heap allocation. There are no explicit
-allocation operations, functions, or captured bindings yet.
+allocation operations. Lab 5 closures extend this lifetime rule: a scope that a
+function captured lives as long as that function value does (see
+[Control flow and functions](#control-flow-and-functions)).
 
 Every block restores its enclosing environment on success or a runtime error,
 including errors inside nested blocks. The REPL can then read its session
@@ -772,13 +805,69 @@ CSL takes the imperative route: statements, mutable variables, and loops.
   exit 70). Every block still restores its enclosing scope, so the REPL keeps
   working after a failing loop.
 
-Known limitations: there is no `break` or `continue`, and an infinite loop
-runs until the process is killed. Logical operators, functions, `return`,
-closures, native functions, and arity checking arrive in later Lab 5 weeks.
+- **Logical operators:** `and` and `or` short-circuit. `a and b` evaluates `b`
+  only when `a` is truthy; `a or b` evaluates `b` only when `a` is falsey. The
+  result is the operand that decided it, not a strict boolean, so
+  `nil or "default"` is `default`, `1 and 2` is `2`, and `0 or 1` is `0`
+  (zero is truthy). We chose operand results so `or` can supply defaults; use
+  `!!x` for a strict boolean. `if` and `while` conditions only use truthiness,
+  so they behave the same either way.
+- **Function declarations:** `fun name(params) { body }` creates a function
+  value and binds it to `name` in the current scope, like `var`. A function
+  declared in a block is local to that block. Functions print as `<fn name>`,
+  are truthy, and compare by identity: `f == f` is `true`, but two separate
+  declarations are never equal even with identical text.
+- **Calls:** the callee evaluates first, then the arguments left to right, all
+  in the caller's scope. Then the call checks, in one place for every kind of
+  callable, that the callee is a function (`Can only call functions.`) and that
+  the argument count matches (`Expected 2 arguments but got 1.`). Both are
+  runtime errors reported at the closing `)`, exit 70. Arguments are values:
+  assigning to a parameter never changes the caller's variable.
+- **Call scope (lexical):** each call creates a fresh scope, defines the
+  parameters there, and runs the body in it. That scope's parent is the scope
+  where the function was *declared*, not where it was *called*. So in
+  `tests/lab5/fun_lexical_scope.csl`, `greet` prints `Hello` even when `rude`
+  calls it after declaring its own local `greeting`. Dynamic scope would print
+  `Go away`. Because a function's own name is bound in the scope it captures,
+  it can call itself, and two functions in one scope can call each other in
+  either order: names are looked up when the call runs. The fresh scope per
+  call means recursive calls never share parameters or locals. The caller's
+  scope is restored when the body finishes or fails.
+- **Results:** `return` arrives in Week 3. Until then every call produces
+  `nil` after its body runs, so `print f();` prints `nil`.
+- **Closures (capture):** a function value holds a shared reference to the
+  scope it was declared in (`Rc<RefCell<Environment>>`). That scope stays
+  alive as long as the function value does, even after the block or call that
+  created it has ended. Closures capture bindings, not snapshots: two
+  functions made in the same call share their variables, and a closure sees
+  later assignments to them. Each factory call makes a fresh scope, so two
+  counters from one factory keep separate state. Without `return`, a function
+  escapes by assignment to an outer variable, as in
+  `tests/lab5/closure_counter.csl`.
+- **Loop capture:** a `for` loop variable is one binding shared by every
+  iteration, so closures made in different iterations all see its final value.
+  A `var` declared inside a braced loop body is fresh on every pass, so copying
+  the loop value into it gives each closure its own binding
+  (`tests/lab5/closure_loop_capture.csl`).
+
+Known limitations:
+
+- There is no `break` or `continue`, and an infinite loop runs until the
+  process is killed.
+- `return` and native functions arrive in Week 3.
+- Deep recursion overflows the Rust stack. About 1,000 nested calls work, but
+  around 100,000 the process aborts with a host stack-overflow message
+  (exit 134) instead of a CSL runtime error. A depth-limited runtime error is
+  planned for Week 3.
+- A function stored in the scope it captures forms a reference cycle
+  (scope → function → scope). Reference counting cannot free such a cycle, so
+  that memory is released only when the process exits. This does not change
+  program behavior.
 
 ## Native functions
 
-Deferred to Lab 5. No native functions are callable. `inspect`, `isolate`, and
+Deferred to Lab 5 Week 3. No native functions are callable yet; they will
+implement the same `Callable` trait as user functions. `inspect`, `isolate`, and
 `execute` are reserved tokens, not operational APIs.
 
 ## Errors and diagnostics
@@ -805,11 +894,10 @@ Expression modes accept variable reads and assignment, but no declarations.
 * `{}` delimits lexical blocks, as in `{ print x; }`.
 * `[]` is reserved for arrays/indexing, as in `items[0]`.
 * `;` terminates statements, as in `print 42;`.
-* `()` groups expressions such as `(1 + 2)`; calls such as `inspect(host)`
-  remain planned.
-* `if`, `else`, `while`, and `for` execute as described above. Reserved words
-  such as `fun`, `return`, `and`, and `or` are recognized; their execution
-  semantics remain deferred.
+* `()` groups expressions such as `(1 + 2)` and calls functions, as in
+  `greet("Ana")`.
+* `if`, `else`, `while`, `for`, `and`, `or`, and `fun` execute as described
+  above. `return` is recognized; its execution semantics arrive in Week 3.
 
 Explicit punctuation avoids indentation-sensitive scanning. Whole-name keyword
 lookup keeps identifiers such as `variable` usable. Raw strings and line comments
@@ -831,15 +919,16 @@ inspection.
 | `src/scanner.rs` | Reads the raw source code character by character and turns it into tokens |
 | `src/environment.rs` | Stores local bindings and enclosing scopes; resolves lookup and assignment |
 | `src/value.rs` | Defines runtime values, truthiness, and value printing |
+| `src/function.rs` | Defines the `Callable` trait and user functions with their captured scope |
 | `src/evaluator.rs` | Evaluates expression trees, executes statements, and reports runtime errors |
 | `src/expr.rs` | Defines expression AST nodes and their printed representation |
 | `src/parser.rs` | Parses expressions and programs; recovers at statement and block boundaries |
-| `src/stmt.rs` | Defines blocks, declarations, print, expression, `if`, and `while` statements |
+| `src/stmt.rs` | Defines blocks, declarations, print, expression, `if`, `while`, and function statements |
 | `src/repl.rs` | Keeps session bindings across input lines and errors |
 | `src/main.rs` | Dispatches script execution, earlier flags, and the REPL |
 | `tests/lab2/` | Parser fixtures with inline AST and diagnostic expectations |
 | `tests/lab3/` | Evaluator fixtures with inline value and error expectations |
 | `tests/lab4/` | Script fixtures with inline output, silence, and error expectations |
-| `tests/lab5/` | Control-flow fixtures for conditionals, loops, scope, and errors |
+| `tests/lab5/` | Fixtures for conditionals, loops, logical operators, functions, closures, and errors |
 | `tests/cli.rs` | Checks CLI output, diagnostics, exit status, and REPL recovery |
 | `tests/cli_tests.rs` | Checks scanner regressions and default REPL compatibility |

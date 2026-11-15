@@ -1,0 +1,2 @@
+print "must not run";
+fun f(a, 1) {} // expect error: Expect parameter name.

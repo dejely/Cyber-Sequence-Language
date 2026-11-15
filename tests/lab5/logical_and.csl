@@ -1,0 +1,6 @@
+// `and` returns its left operand when that operand is falsey, otherwise its right.
+print true and "right";  // expect: right
+print 1 and 2;           // expect: 2
+print false and "right"; // expect: false
+print nil and "right";   // expect: nil
+print 0 and "";          // expect:

@@ -1,0 +1,21 @@
+// A captured parameter stays bound after its call ends. The two adders keep
+// different `base` values, and calling one never disturbs the other.
+var latest;
+fun makeAdder(base) {
+    fun add(x) {
+        print base + x;
+    }
+    latest = add;
+}
+makeAdder(2);
+var addTwo = latest;
+makeAdder(10);
+var addTen = latest;
+addTwo(3); // expect: 5
+addTen(3); // expect: 13
+addTwo(3); // expect: 5
+// Higher-order use with a captured binding: `apply` calls through a parameter.
+fun apply(f, x) {
+    f(x);
+}
+apply(addTen, 5); // expect: 15

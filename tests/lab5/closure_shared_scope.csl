@@ -1,0 +1,20 @@
+// Closures capture the scope itself, not a copy of its values. Two functions
+// made in the same call share `n`, and both see later updates.
+var bump;
+var show;
+fun makePair() {
+    var n = 0;
+    fun up() {
+        n = n + 1;
+    }
+    fun look() {
+        print n;
+    }
+    bump = up;
+    show = look;
+}
+makePair();
+show(); // expect: 0
+bump();
+bump();
+show(); // expect: 2

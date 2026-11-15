@@ -1,0 +1,2 @@
+print "must not run";
+fun f(a) print a; // expect error: Expect '{' before function body.

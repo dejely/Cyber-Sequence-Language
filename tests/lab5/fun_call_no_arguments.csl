@@ -1,0 +1,7 @@
+// A declaration is silent; the body runs once per call.
+fun hello() {
+    print "hello";
+}
+print "declared"; // expect: declared
+hello();          // expect: hello
+hello();          // expect: hello

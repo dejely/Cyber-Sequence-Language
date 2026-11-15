@@ -27,5 +27,22 @@ parses to a block holding `var i = 0;` and a `while (i < 2)` whose body is a
 block of `print i;` and `i = i + 1;`. The loop variable lives in the outer
 block and is gone after the loop (`tests/lab5/for_variable_does_not_leak.csl`).
 
+Week 2 is implemented. `and` and `or` short-circuit and return the operand
+that decided the result. `fun` declarations create function values that hold
+the scope they were declared in. Calls are a postfix operator on any
+expression; the call expression evaluates the callee and arguments, checks
+callability and arity once for every `Callable`, and runs the body in a fresh
+scope whose parent is the captured scope. Scopes are now shared through
+`Rc<RefCell<Environment>>`, so a captured scope outlives its block or call.
+Without `return`, functions escape by assignment, and the closure fixtures use
+that to show retained and independent state.
+
+Trace for the progress report, `tests/lab5/fun_lexical_scope.csl`: `greet` is
+declared in the global scope, so its closure is the global scope. `rude()`
+creates scope R (parent: global) and defines `greeting = "Go away"` in R.
+Calling `greet()` from R creates scope G whose parent is `greet`'s closure,
+the global scope, not R. Looking up `greeting` from G finds nothing in G and
+then reaches the global `"Hello"`; R is never searched.
+
 Verify locally with `./build.sh`, `cargo test`, and
 `python3 run_tests.py tests/lab5`. Run Labs 0–4 as regression checks.

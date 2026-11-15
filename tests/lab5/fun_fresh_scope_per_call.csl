@@ -1,0 +1,18 @@
+// Every call starts with fresh locals; nothing persists between calls.
+fun tick() {
+    var tally = 0;
+    tally = tally + 1;
+    print tally;
+}
+tick(); // expect: 1
+tick(); // expect: 1
+// Recursive calls each get their own binding of `mine`. If calls shared one
+// scope, every line would print 0.
+fun depth(n) {
+    var mine = n;
+    if (n > 0) depth(n - 1);
+    print mine;
+}
+depth(2); // expect: 0
+          // expect: 1
+          // expect: 2

@@ -1,0 +1,7 @@
+// Calls chain: `f()()` calls whatever `f()` produced. Without `return` that is
+// nil, which is not callable.
+fun f() {
+    print "first";
+}
+f()(); // expect: first
+       // expect runtime error: Can only call functions.

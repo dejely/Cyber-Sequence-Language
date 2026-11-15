@@ -1,0 +1,18 @@
+// A skipped right operand would divide by zero, so these lines fail if it runs.
+print false and 1 / 0; // expect: false
+print nil and 1 / 0;   // expect: nil
+print true or 1 / 0;   // expect: true
+print "yes" or 1 / 0;  // expect: yes
+
+// The right operand's side effects happen only when it runs.
+var hits = 0;
+false and (hits = hits + 1);
+true or (hits = hits + 1);
+print hits; // expect: 0
+true and (hits = hits + 1);
+false or (hits = hits + 1);
+print hits; // expect: 2
+
+// The textbook guard: the division is skipped when the denominator is zero.
+var denominator = 0;
+if (denominator != 0 and 10 / denominator > 1) print "ratio"; else print "guarded"; // expect: guarded

@@ -1,0 +1,12 @@
+// A function sees its own name because it is bound in the scope it captures.
+fun countdown(n) {
+    if (n > 0) {
+        print n;
+        countdown(n - 1);
+    }
+}
+countdown(3); // expect: 3
+              // expect: 2
+              // expect: 1
+countdown(0); // the base case prints nothing
+print "done"; // expect: done

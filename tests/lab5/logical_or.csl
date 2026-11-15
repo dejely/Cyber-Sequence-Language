@@ -1,0 +1,6 @@
+// `or` returns its left operand when that operand is truthy, otherwise its right.
+print "left" or "right"; // expect: left
+print 0 or "right";      // expect: 0
+print nil or "default";  // expect: default
+print false or nil;      // expect: nil
+print false or false;    // expect: false

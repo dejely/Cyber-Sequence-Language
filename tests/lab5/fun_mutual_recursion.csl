@@ -1,0 +1,11 @@
+// Mutual recursion: `evenStep` names `oddStep` before it is declared. The name
+// is looked up when the call runs, by which time both are defined.
+fun evenStep(n) {
+    if (n == 0) print "even"; else oddStep(n - 1);
+}
+fun oddStep(n) {
+    if (n == 0) print "odd"; else evenStep(n - 1);
+}
+evenStep(4); // expect: even
+evenStep(3); // expect: odd
+evenStep(0); // expect: even

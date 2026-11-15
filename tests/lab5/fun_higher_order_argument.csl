@@ -1,0 +1,19 @@
+// A function can be passed as an argument and called through the parameter.
+fun twice(action, value) {
+    action(value);
+    action(value);
+}
+fun echo(word) {
+    print word;
+}
+twice(echo, "again"); // expect: again
+                      // expect: again
+fun each(from, to, action) {
+    for (var i = from; i < to; i = i + 1) action(i);
+}
+fun square(n) {
+    print n * n;
+}
+each(1, 4, square); // expect: 1
+                    // expect: 4
+                    // expect: 9

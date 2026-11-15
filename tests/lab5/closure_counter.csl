@@ -1,0 +1,17 @@
+// Until `return` arrives in Week 3, a function escapes its defining call by
+// being assigned to an outer variable. `tally` belongs to one call of
+// makeCounter, and that call has ended, but `increment` still holds its scope.
+var latest;
+fun makeCounter() {
+    var tally = 0;
+    fun increment() {
+        tally = tally + 1;
+        print tally;
+    }
+    latest = increment;
+}
+makeCounter();
+var counter = latest;
+counter(); // expect: 1
+counter(); // expect: 2
+counter(); // expect: 3

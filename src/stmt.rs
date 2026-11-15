@@ -1,5 +1,7 @@
 //! Statements perform effects; their expression values are not echoed in files.
 
+use std::rc::Rc;
+
 use crate::expr::Expr;
 use crate::token::{Literal, Token};
 
@@ -31,4 +33,14 @@ pub enum Stmt {
         condition: Expr,
         body: Box<Stmt>,
     },
+    /// Shared, so each function value points at its declaration instead of
+    /// copying the body every time the declaration runs.
+    Function(Rc<FunctionDecl>),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct FunctionDecl {
+    pub name: Token,
+    pub params: Vec<Token>,
+    pub body: Vec<Stmt>,
 }

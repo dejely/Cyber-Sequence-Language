@@ -1,25 +1,30 @@
 //! Each lexical scope owns its bindings and links to its enclosing scope.
+//!
+//! Scopes are shared (`Rc<RefCell<_>>`) rather than owned by their inner
+//! scope, so something other than the running block can keep a scope alive.
+//! A function value will hold its defining scope this way, which lets the
+//! scope outlive the block or call that created it.
 
+use std::cell::RefCell;
 use std::collections::HashMap;
+use std::rc::Rc;
 
 use crate::value::Value;
+
+pub type SharedEnvironment = Rc<RefCell<Environment>>;
 
 #[derive(Default)]
 pub struct Environment {
     values: HashMap<String, Value>,
-    enclosing: Option<Box<Environment>>,
+    enclosing: Option<SharedEnvironment>,
 }
 
 impl Environment {
-    pub fn enclosed(enclosing: Environment) -> Self {
-        Self {
+    pub fn enclosed(enclosing: SharedEnvironment) -> SharedEnvironment {
+        Rc::new(RefCell::new(Self {
             values: HashMap::new(),
-            enclosing: Some(Box::new(enclosing)),
-        }
-    }
-
-    pub fn into_enclosing(self) -> Option<Self> {
-        self.enclosing.map(|environment| *environment)
+            enclosing: Some(enclosing),
+        }))
     }
 
     pub fn define(&mut self, name: &str, value: Value) {
@@ -27,10 +32,11 @@ impl Environment {
     }
 
     pub fn get(&self, name: &str) -> Option<Value> {
-        self.values
-            .get(name)
-            .cloned()
-            .or_else(|| self.enclosing.as_ref().and_then(|outer| outer.get(name)))
+        self.values.get(name).cloned().or_else(|| {
+            self.enclosing
+                .as_ref()
+                .and_then(|outer| outer.borrow().get(name))
+        })
     }
 
     /// Assignment updates a binding; a miss must never create one.
@@ -40,8 +46,8 @@ impl Environment {
             true
         } else {
             self.enclosing
-                .as_mut()
-                .is_some_and(|outer| outer.assign(name, value))
+                .as_ref()
+                .is_some_and(|outer| outer.borrow_mut().assign(name, value))
         }
     }
 }
