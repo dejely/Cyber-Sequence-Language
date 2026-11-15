@@ -22,6 +22,12 @@ pub enum Expr {
         right: Box<Expr>,
     },
     Grouping(Box<Expr>),
+    /// Kept apart from `Binary` because the right operand may never run.
+    Logical {
+        left: Box<Expr>,
+        operator: Token,
+        right: Box<Expr>,
+    },
 }
 
 impl fmt::Display for Expr {
@@ -42,6 +48,11 @@ impl fmt::Display for Expr {
                 write!(f, "{left} {right} {}", operator.lexeme())
             }
             Self::Grouping(expression) => write!(f, "{expression}"),
+            Self::Logical {
+                left,
+                operator,
+                right,
+            } => write!(f, "{left} {right} {}", operator.lexeme()),
         }
     }
 }

@@ -287,7 +287,7 @@ impl Parser {
     }
 
     fn assignment(&mut self) -> Result<Expr, String> {
-        let expression = self.equality()?;
+        let expression = self.logic_or()?;
         if self.match_token(&[TokenType::Equal]) {
             let equals = self.previous().clone();
             // Recursing on the right makes a = b = value right associative.
@@ -305,6 +305,35 @@ impl Parser {
             ));
         }
         Ok(expression)
+    }
+
+    /// `or` binds looser than `and`, as the words do in English.
+    fn logic_or(&mut self) -> Result<Expr, String> {
+        let mut expr = self.logic_and()?;
+        while self.match_token(&[TokenType::Or]) {
+            let operator = self.previous().clone();
+            let right = self.logic_and()?;
+            expr = Expr::Logical {
+                left: Box::new(expr),
+                operator,
+                right: Box::new(right),
+            };
+        }
+        Ok(expr)
+    }
+
+    fn logic_and(&mut self) -> Result<Expr, String> {
+        let mut expr = self.equality()?;
+        while self.match_token(&[TokenType::And]) {
+            let operator = self.previous().clone();
+            let right = self.equality()?;
+            expr = Expr::Logical {
+                left: Box::new(expr),
+                operator,
+                right: Box::new(right),
+            };
+        }
+        Ok(expr)
     }
 
     pub fn equality(&mut self) -> Result<Expr, String> {

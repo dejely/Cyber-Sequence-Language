@@ -1,0 +1,4 @@
+// A right operand that does run reports its own runtime error.
+print "before"; // expect: before
+print true and 1 / 0; // expect runtime error: Division by zero.
+print "must not run";

@@ -1,0 +1,3 @@
+// A logical operator needs a right operand.
+print "must not run";
+print true and; // expect error: Expect expression.

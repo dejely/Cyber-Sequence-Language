@@ -84,6 +84,25 @@ impl Interpreter {
                 let right = self.evaluate(right)?;
                 binary(operator, left, right)
             }
+            // Short-circuiting is semantics, not an optimization: the right
+            // operand runs only when the left one cannot decide the result.
+            // The deciding operand itself is the result, so `nil or "x"` is "x".
+            Expr::Logical {
+                left,
+                operator,
+                right,
+            } => {
+                let left = self.evaluate(left)?;
+                let decided = match operator.token_type() {
+                    TokenType::Or => left.is_truthy(),
+                    _ => !left.is_truthy(),
+                };
+                if decided {
+                    Ok(left)
+                } else {
+                    self.evaluate(right)
+                }
+            }
         }
     }
 
