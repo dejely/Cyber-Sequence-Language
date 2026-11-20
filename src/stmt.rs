@@ -21,6 +21,7 @@ pub enum Stmt {
         initializer: Option<Expr>,
     },
     Print(Expr),
+    Return(Option<Expr>),
     Expression(Expr),
     /// Branches are statements, so `else if` needs no extra grammar rule.
     If {
