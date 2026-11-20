@@ -1,0 +1,4 @@
+// A return is still illegal in a top-level block.
+{
+    return 42; // expect error: [line 3] Error at 'return': Cannot return outside a function.
+}

@@ -1,0 +1,15 @@
+fun makeCounter() {
+    var tally = 0;
+    fun next() {
+        tally = tally + 1;
+        return tally;
+    }
+    return next;
+}
+fun invoke(callback) { return callback(); }
+var a = makeCounter();
+var b = makeCounter();
+print invoke(a); // expect: 1
+print a(); // expect: 2
+print b(); // expect: 1
+print a(); // expect: 3

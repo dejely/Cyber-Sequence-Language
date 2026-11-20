@@ -555,6 +555,37 @@ fn repl_restores_the_caller_scope_after_a_runtime_error_inside_a_call() {
 }
 
 #[test]
+fn repl_recovers_from_call_depth_and_preserves_scope_after_early_return() {
+    let output = run(
+        &[],
+        concat!(
+            "var label = \"global\";\n",
+            "fun find() { var label = \"local\"; while (true) { return label; } }\n",
+            "fun recurse() { return recurse(); }\n",
+            "find()\n",
+            "label\n",
+            "recurse()\n",
+            "label\n",
+            "len(42)\n",
+            "len(\"ok\")\n",
+        ),
+    );
+
+    assert!(output.status.success());
+    assert_eq!(
+        output.stdout,
+        b"> > > > local\n> global\n> > global\n> > 2\n> "
+    );
+    assert_eq!(
+        String::from_utf8(output.stderr).unwrap(),
+        concat!(
+            "[line 1] Runtime error at ')': Maximum call depth (128) exceeded.\n",
+            "[line 1] Runtime error at ')': len expects a string.\n",
+        ),
+    );
+}
+
+#[test]
 fn annotation_errors_reject_the_entire_file_before_execution() {
     let path = std::env::temp_dir().join(format!("cmsc124-annotations-{}.csl", std::process::id()));
     std::fs::write(&path, "print \"must not run\";\n@entry var main;").unwrap();

@@ -1,0 +1,1 @@
+len(42); // expect runtime error: len expects a string.

@@ -1,0 +1,7 @@
+fun bare() {
+    return;
+    print "unreachable";
+}
+fun fallThrough() {}
+print bare(); // expect: nil
+print fallThrough(); // expect: nil

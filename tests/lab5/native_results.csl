@@ -1,0 +1,9 @@
+print len(""); // expect: 0
+print len("café🙂"); // expect: 5
+print typeOf(7); // expect: number
+print typeOf("text"); // expect: string
+print typeOf(false); // expect: boolean
+print typeOf(nil); // expect: nil
+print typeOf(len); // expect: function
+fun runNative(callback, text) { return callback(text); }
+print runNative(len, "abc"); // expect: 3
