@@ -5,6 +5,7 @@ tree-walking evaluator. Lab 4 Weeks 1–3 add print and expression statements,
 variable declarations, lookup, assignment, and nested lexical blocks. Lab 5
 Week 1 adds `if`/`else`, `while`, and `for` control flow. Week 2 adds
 short-circuiting `and`/`or`, function declarations, calls, and closures.
+Week 3 adds early returns, returned closures, native functions, and a call-depth limit.
 Declaration annotations add validated metadata to `var` declarations.
 CSL monitoring operations remain deferred.
 
@@ -72,6 +73,13 @@ The [Lab 4 brief](docs/labs/lab4.md) links the course requirements and records
 which weekly features are implemented. The [Lab 5 brief](docs/labs/lab5.md)
 does the same for control flow and functions.
 
+### Lab 5 Week 3 showcase
+
+Run `./run examples/lab5/sign_in_summary.csl`. The program uses two returned
+counters to summarize a fixed sample of sign-in batches. It reports six
+attempts, three failures, and a review message when the failure count meets
+the threshold.
+
 ## Grammar
 
 The implemented expression grammar follows the
@@ -101,9 +109,10 @@ annotation  → "@" IDENTIFIER ( "(" STRING? ")" )?
 funDecl     → "fun" IDENTIFIER "(" parameters? ")" block
 parameters  → IDENTIFIER ( "," IDENTIFIER )*
 varDecl     → "var" IDENTIFIER ( "=" expression )? ";"
-statement   → printStmt | exprStmt | block | ifStmt | whileStmt | forStmt
+statement   → printStmt | returnStmt | exprStmt | block | ifStmt | whileStmt | forStmt
 block       → "{" declaration* "}"
 printStmt   → "print" expression ";"
+returnStmt  → "return" expression? ";"
 exprStmt    → expression ";"
 ifStmt      → "if" "(" expression ")" statement ( "else" statement )?
 whileStmt   → "while" "(" expression ")" statement
@@ -168,7 +177,7 @@ reports both errors:
 [line 2] Error at ';': Expect expression.
 ```
 
-Program recovery also stops before an `@`, `fun`, `var`, `print`, `{`, `if`,
+Program recovery also stops before an `@`, `fun`, `var`, `print`, `return`, `{`, `if`,
 `while`, or `for` statement starter
 and preserves a closing `}` for the block that owns it. A stray `}` at top level
 is diagnosed and consumed. Errors inside nested blocks are collected in source
@@ -179,8 +188,8 @@ Assignment associates to the right: `a = b = 7` stores `7` in both existing
 bindings and evaluates to `7`. Its postfix AST is `a b 7.0 = =`. Only a bare
 identifier is an assignment target; `(a) = 7` and `1 = 7` are static errors.
 Declarations are accepted in programs and the default REPL; `--parse` and
-`--eval` retain their expression-only interfaces. Unary `+`, `return` (Week 3),
-`break`, anonymous functions, arrays, and CSL rules remain outside the grammar. Chained comparisons are parsed left to right; the evaluator
+`--eval` retain their expression-only interfaces. Unary `+`, `break`, anonymous functions, arrays,
+and CSL rules remain outside the grammar. Chained comparisons are parsed left to right; the evaluator
 checks operand types at runtime. The scanner's existing numeric and raw-string
 rules still apply: exponent syntax is unsupported, oversized numbers are
 rejected, and large or small values may print in scientific notation. AST string
@@ -286,7 +295,9 @@ order, function values, local parameters, fresh per-call scope, the
 lexical-scope distinguishing test, recursion, mutual recursion, functions as
 arguments, and arity, non-callable, and malformed-declaration errors. Closure
 fixtures show escaping counters with independent state, captured parameters,
-shared scopes, a closure outliving its block, and loop capture. CI runs all six
+shared scopes, a closure outliving its block, and loop capture. Week 3 tests
+early returns, returned counters, native results and errors, and recovery
+from a call-depth error. CI runs all six
 laboratory suites, the annotation suite, and `cargo test`.
 
 - Jemarco Briz ([Jmbriz123](https://github.com/Jmbriz123))
@@ -642,7 +653,7 @@ pub enum Value { Number(f64), String(String), Boolean(bool), Nil, Callable(Rc<dy
 
 Lab 5 adds `Callable`: every function value is a shared pointer to something
 implementing the `Callable` trait in `src/function.rs`. User functions are one
-implementation; the Week 3 native functions will be another.
+implementation; native functions are the other.
 
 - **Uniform storage:** every evaluator function returns `Value`, whatever the
   CSL type turns out to be.
@@ -832,18 +843,22 @@ CSL takes the imperative route: statements, mutable variables, and loops.
   it can call itself, and two functions in one scope can call each other in
   either order: names are looked up when the call runs. The fresh scope per
   call means recursive calls never share parameters or locals. The caller's
-  scope is restored when the body finishes or fails.
-- **Results:** `return` arrives in Week 3. Until then every call produces
-  `nil` after its body runs, so `print f();` prints `nil`.
+  scope is restored on normal completion, early return, and runtime error.
+- **Results:** `return expression;` evaluates the expression and ends the
+  current function, even inside blocks, branches, or loops. Bare `return;`
+  and reaching the end both produce `nil`. A return outside a function is a
+  static error (file exit 65). Use `print` to display a result in a file.
+  The program REPL also echoes a call entered as an expression.
 - **Closures (capture):** a function value holds a shared reference to the
   scope it was declared in (`Rc<RefCell<Environment>>`). That scope stays
   alive as long as the function value does, even after the block or call that
   created it has ended. Closures capture bindings, not snapshots: two
   functions made in the same call share their variables, and a closure sees
   later assignments to them. Each factory call makes a fresh scope, so two
-  counters from one factory keep separate state. Without `return`, a function
-  escapes by assignment to an outer variable, as in
-  `tests/lab5/closure_counter.csl`.
+  counters from one factory keep separate state. A function can escape by
+  assignment or by being returned. In `tests/lab5/closure_returned_counter.csl`,
+  `makeCounter()` returns its inner function, and the caller passes that
+  function as an argument and invokes it.
 - **Loop capture:** a `for` loop variable is one binding shared by every
   iteration, so closures made in different iterations all see its final value.
   A `var` declared inside a braced loop body is fresh on every pass, so copying
@@ -854,11 +869,8 @@ Known limitations:
 
 - There is no `break` or `continue`, and an infinite loop runs until the
   process is killed.
-- `return` and native functions arrive in Week 3.
-- Deep recursion overflows the Rust stack. About 1,000 nested calls work, but
-  around 100,000 the process aborts with a host stack-overflow message
-  (exit 134) instead of a CSL runtime error. A depth-limited runtime error is
-  planned for Week 3.
+- The interpreter allows up to 128 active calls. The next call produces
+  a CSL runtime error (file exit 70). The REPL can continue after this error.
 - A function stored in the scope it captures forms a reference cycle
   (scope → function → scope). Reference counting cannot free such a cycle, so
   that memory is released only when the process exits. This does not change
@@ -866,9 +878,16 @@ Known limitations:
 
 ## Native functions
 
-Deferred to Lab 5 Week 3. No native functions are callable yet; they will
-implement the same `Callable` trait as user functions. `inspect`, `isolate`, and
-`execute` are reserved tokens, not operational APIs.
+The interpreter defines these functions in the global scope before the
+program or REPL runs. Natives and user functions share the same callability
+and arity checks.
+
+| Name | Arity | Return type | Behavior |
+| --- | --- | --- | --- |
+| `len(text)` | 1 | number | Counts Unicode scalar values in a string. A different argument type produces a runtime error. |
+| `typeOf(value)` | 1 | string | Returns `"number"`, `"string"`, `"boolean"`, `"nil"`, or `"function"`. |
+
+The domain-specific `inspect`, `isolate`, and `execute` keywords remain reserved.
 
 ## Errors and diagnostics
 
@@ -897,7 +916,7 @@ Expression modes accept variable reads and assignment, but no declarations.
 * `()` groups expressions such as `(1 + 2)` and calls functions, as in
   `greet("Ana")`.
 * `if`, `else`, `while`, `for`, `and`, `or`, and `fun` execute as described
-  above. `return` is recognized; its execution semantics arrive in Week 3.
+  above. `return` ends the current function and supplies its result.
 
 Explicit punctuation avoids indentation-sensitive scanning. Whole-name keyword
 lookup keeps identifiers such as `variable` usable. Raw strings and line comments

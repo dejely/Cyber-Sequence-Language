@@ -1,0 +1,33 @@
+// Summarize a fixed sample of successful and failed sign-ins.
+fun makeCounter() {
+    var total = 0;
+    fun add(amount) {
+        total = total + amount;
+        return total;
+    }
+    return add;
+}
+
+fun recordBatch(result, size, countSeen, countFailed) {
+    for (var i = 0; i < size; i = i + 1) {
+        countSeen(1);
+        if (result == "failed") countFailed(1);
+    }
+}
+
+fun report(label, countSeen, countFailed) {
+    if (len(label) == 0) return;
+    print label;
+    print "Attempts";
+    print countSeen(0);
+    print "Failures";
+    print countFailed(0);
+    if (countFailed(0) >= 3) print "Review recommended";
+}
+
+var seen = makeCounter();
+var failed = makeCounter();
+recordBatch("success", 2, seen, failed);
+recordBatch("failed", 3, seen, failed);
+recordBatch("success", 1, seen, failed);
+report("Sample sign-in summary", seen, failed);
