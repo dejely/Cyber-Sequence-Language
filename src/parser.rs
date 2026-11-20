@@ -9,6 +9,7 @@ use crate::token::{Literal, Token, TokenType};
 pub struct Parser {
     tokens: Vec<Token>,
     current: usize, // Index of the next token to consume.
+    function_depth: usize,
 }
 
 impl Parser {
@@ -18,7 +19,11 @@ impl Parser {
             let line = tokens.last().map_or(1, Token::line);
             tokens.push(Token::new(TokenType::Eof, String::new(), None, line));
         }
-        Self { tokens, current: 0 }
+        Self {
+            tokens,
+            current: 0,
+            function_depth: 0,
+        }
     }
 
     /// Parses one complete REPL expression, allowing a final semicolon.
@@ -217,7 +222,10 @@ impl Parser {
         }
         self.consume(&TokenType::RightParen, "Expect ')' after parameters.")?;
         self.consume(&TokenType::LeftBrace, "Expect '{' before function body.")?;
-        let body = self.statement_list(true)?;
+        self.function_depth += 1;
+        let body = self.statement_list(true);
+        self.function_depth -= 1;
+        let body = body?;
         Ok(Stmt::Function(Rc::new(FunctionDecl { name, params, body })))
     }
 
@@ -233,6 +241,21 @@ impl Parser {
         }
         if self.match_token(&[TokenType::LeftBrace]) {
             return self.statement_list(true).map(Stmt::Block);
+        }
+        if self.match_token(&[TokenType::Return]) {
+            if self.function_depth == 0 {
+                return Err(format!(
+                    "[line {}] Error at 'return': Cannot return outside a function.",
+                    self.previous().line()
+                ));
+            }
+            let value = if self.check(&TokenType::Semicolon) {
+                None
+            } else {
+                Some(self.expression()?)
+            };
+            self.consume(&TokenType::Semicolon, "Expect ';' after return.")?;
+            return Ok(Stmt::Return(value));
         }
         if self.match_token(&[TokenType::Print]) {
             let expression = self.expression()?;
@@ -526,6 +549,7 @@ impl Parser {
                 | TokenType::Var
                 | TokenType::Fun
                 | TokenType::Print
+                | TokenType::Return
                 | TokenType::LeftBrace
                 | TokenType::If
                 | TokenType::While

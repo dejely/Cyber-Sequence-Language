@@ -1,11 +1,13 @@
 //! Tree-walking evaluator: a post-order match over expression nodes.
 
+use std::cell::RefCell;
 use std::fmt;
+use std::ops::ControlFlow;
 use std::rc::Rc;
 
 use crate::environment::{Environment, SharedEnvironment};
 use crate::expr::Expr;
-use crate::function::Function;
+use crate::function::{Function, NativeFunction};
 use crate::stmt::Stmt;
 use crate::token::{Literal, Token, TokenType};
 use crate::value::Value;
@@ -38,10 +40,25 @@ impl fmt::Display for RuntimeError {
     }
 }
 
+const MAX_CALL_DEPTH: usize = 128;
+
 /// Owns the bindings shared by every statement and expression in a session.
-#[derive(Default)]
 pub struct Interpreter {
     environment: SharedEnvironment,
+    call_depth: usize,
+}
+
+impl Default for Interpreter {
+    fn default() -> Self {
+        let mut globals = Environment::default();
+        for native in [NativeFunction::Len, NativeFunction::TypeOf] {
+            globals.define(native.name(), Value::Callable(Rc::new(native)));
+        }
+        Self {
+            environment: Rc::new(RefCell::new(globals)),
+            call_depth: 0,
+        }
+    }
 }
 
 impl Interpreter {
@@ -115,7 +132,16 @@ impl Interpreter {
                         ),
                     ));
                 }
-                function.call(self, arguments)
+                if self.call_depth >= MAX_CALL_DEPTH {
+                    return Err(RuntimeError::new(
+                        paren,
+                        format!("Maximum call depth ({MAX_CALL_DEPTH}) exceeded."),
+                    ));
+                }
+                self.call_depth += 1;
+                let result = function.call(self, arguments, paren);
+                self.call_depth -= 1;
+                result
             }
             // Short-circuiting is semantics, not an optimization: the right
             // operand runs only when the left one cannot decide the result.
@@ -140,11 +166,11 @@ impl Interpreter {
     }
 
     /// Statements share the expression evaluator and its runtime errors.
-    pub fn execute(&mut self, statement: &Stmt) -> Result<(), RuntimeError> {
+    pub fn execute(&mut self, statement: &Stmt) -> Result<ControlFlow<Value>, RuntimeError> {
         match statement {
             Stmt::Block(statements) => {
                 let scope = Environment::enclosed(Rc::clone(&self.environment));
-                self.execute_block(statements, scope)?;
+                return self.execute_block(statements, scope);
             }
             // Annotations describe declarations; they do not change execution.
             Stmt::Var {
@@ -158,6 +184,13 @@ impl Interpreter {
                 self.environment.borrow_mut().define(name.lexeme(), value);
             }
             Stmt::Print(expression) => println!("{}", self.evaluate(expression)?),
+            Stmt::Return(expression) => {
+                let value = match expression {
+                    Some(expression) => self.evaluate(expression)?,
+                    None => Value::Nil,
+                };
+                return Ok(ControlFlow::Break(value));
+            }
             Stmt::Expression(expression) => {
                 self.evaluate(expression)?;
             }
@@ -168,9 +201,9 @@ impl Interpreter {
                 else_branch,
             } => {
                 if self.evaluate(condition)?.is_truthy() {
-                    self.execute(then_branch)?;
+                    return self.execute(then_branch);
                 } else if let Some(else_branch) = else_branch {
-                    self.execute(else_branch)?;
+                    return self.execute(else_branch);
                 }
             }
             // The function captures the scope it is declared in. Its name is
@@ -186,25 +219,30 @@ impl Interpreter {
             // is a block, so each iteration gets a fresh local scope.
             Stmt::While { condition, body } => {
                 while self.evaluate(condition)?.is_truthy() {
-                    self.execute(body)?;
+                    if let ControlFlow::Break(value) = self.execute(body)? {
+                        return Ok(ControlFlow::Break(value));
+                    }
                 }
             }
         }
-        Ok(())
+        Ok(ControlFlow::Continue(()))
     }
 
-    /// Runs `statements` in `scope`, then reinstates the previous scope.
-    /// The result is saved before propagating errors so the caller's scope
-    /// comes back on success and on a runtime error, at every nesting level.
+    /// Runs `statements` in `scope`, then reinstates the previous scope
+    /// after normal completion, an early return, or a runtime error.
     pub fn execute_block(
         &mut self,
         statements: &[Stmt],
         scope: SharedEnvironment,
-    ) -> Result<(), RuntimeError> {
+    ) -> Result<ControlFlow<Value>, RuntimeError> {
         let previous = std::mem::replace(&mut self.environment, scope);
-        let result = statements
-            .iter()
-            .try_for_each(|statement| self.execute(statement));
+        let mut result = Ok(ControlFlow::Continue(()));
+        for statement in statements {
+            result = self.execute(statement);
+            if !matches!(result, Ok(ControlFlow::Continue(()))) {
+                break;
+            }
+        }
         self.environment = previous;
         result
     }

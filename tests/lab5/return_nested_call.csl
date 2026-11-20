@@ -1,0 +1,10 @@
+// The inner return completes inner(), then outer() continues in its own scope.
+var label = "global";
+fun inner() { return "inner"; }
+fun outer() {
+    var label = "outer";
+    print inner(); // expect: inner
+    return label;
+}
+print outer(); // expect: outer
+print label; // expect: global

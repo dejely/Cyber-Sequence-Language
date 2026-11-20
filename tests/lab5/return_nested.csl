@@ -1,0 +1,14 @@
+// The return crosses an if, a while, and a desugared for.
+fun firstMatch() {
+    for (var i = 0; i < 6; i = i + 1) {
+        var checks = 1;
+        while (checks > 0) {
+            if (i == 3) {
+                return i;
+            }
+            checks = checks - 1;
+        }
+    }
+    print "unreachable";
+}
+print firstMatch(); // expect: 3

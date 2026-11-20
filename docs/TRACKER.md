@@ -230,11 +230,11 @@ dead-code warnings are resolved. The release build completed without warnings.
 
 ### Week 3
 
-- [ ] Function results via `return`, returned functions, and `makeCounter` tests.
-- [ ] A clean runtime error for deep recursion instead of a host stack overflow.
-- [ ] At least two native functions, documented in the README.
-- [ ] One shared arity check for user and native functions.
-- [ ] Non-trivial example program under `examples/`.
+- [x] Function results via `return`, returned functions, and `makeCounter` tests.
+- [x] A clean runtime error for deep recursion instead of a host stack overflow.
+- [x] At least two native functions, documented in the README.
+- [x] One shared arity check for user and native functions.
+- [x] Non-trivial example program under `examples/`.
 - [ ] Green CI across all six folders.
 
 ### Local verification on 2026-11-09

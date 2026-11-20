@@ -5,11 +5,13 @@
 //! branches on what kind of callable it holds.
 
 use std::fmt;
+use std::ops::ControlFlow;
 use std::rc::Rc;
 
 use crate::environment::{Environment, SharedEnvironment};
 use crate::evaluator::{Interpreter, RuntimeError};
 use crate::stmt::FunctionDecl;
+use crate::token::Token;
 use crate::value::Value;
 
 pub trait Callable: fmt::Display {
@@ -21,6 +23,7 @@ pub trait Callable: fmt::Display {
         &self,
         interpreter: &mut Interpreter,
         arguments: Vec<Value>,
+        call_site: &Token,
     ) -> Result<Value, RuntimeError>;
 }
 
@@ -66,6 +69,7 @@ impl Callable for Function {
         &self,
         interpreter: &mut Interpreter,
         arguments: Vec<Value>,
+        _call_site: &Token,
     ) -> Result<Value, RuntimeError> {
         // A fresh scope per call keeps recursive calls from sharing parameters.
         // Its parent is the closure, NOT the caller's scope: that one link is
@@ -77,14 +81,68 @@ impl Callable for Function {
                 scope.define(param.lexeme(), argument);
             }
         }
-        interpreter.execute_block(&self.declaration.body, scope)?;
-        // `return` arrives in Week 3; until then a call always produces nil.
-        Ok(Value::Nil)
+        match interpreter.execute_block(&self.declaration.body, scope)? {
+            ControlFlow::Break(value) => Ok(value),
+            ControlFlow::Continue(()) => Ok(Value::Nil),
+        }
     }
 }
 
 impl fmt::Display for Function {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "<fn {}>", self.declaration.name.lexeme())
+    }
+}
+
+/// Native functions registered in the global scope at interpreter startup.
+pub(crate) enum NativeFunction {
+    Len,
+    TypeOf,
+}
+
+impl NativeFunction {
+    pub(crate) fn name(&self) -> &'static str {
+        match self {
+            Self::Len => "len",
+            Self::TypeOf => "typeOf",
+        }
+    }
+}
+
+impl Callable for NativeFunction {
+    fn arity(&self) -> usize {
+        1
+    }
+
+    fn call(
+        &self,
+        _interpreter: &mut Interpreter,
+        arguments: Vec<Value>,
+        call_site: &Token,
+    ) -> Result<Value, RuntimeError> {
+        // The evaluator verifies arity before calling any function.
+        let argument = &arguments[0];
+        match self {
+            Self::Len => match argument {
+                Value::String(text) => Ok(Value::Number(text.chars().count() as f64)),
+                _ => Err(RuntimeError::new(call_site, "len expects a string.")),
+            },
+            Self::TypeOf => {
+                let name = match argument {
+                    Value::Number(_) => "number",
+                    Value::String(_) => "string",
+                    Value::Boolean(_) => "boolean",
+                    Value::Nil => "nil",
+                    Value::Callable(_) => "function",
+                };
+                Ok(Value::String(name.to_owned()))
+            }
+        }
+    }
+}
+
+impl fmt::Display for NativeFunction {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "<native fn {}>", self.name())
     }
 }

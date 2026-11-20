@@ -1,0 +1,2 @@
+fun recurse() { return recurse(); }
+recurse(); // expect runtime error: Maximum call depth (128) exceeded.
