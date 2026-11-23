@@ -1,4 +1,4 @@
-use std::io::Write;
+use std::io::{ErrorKind, Write};
 use std::path::Path;
 use std::process::{Command, Output, Stdio};
 
@@ -15,12 +15,10 @@ fn run_in(directory: &Path, args: &[&str], input: &str) -> Output {
         .stderr(Stdio::piped())
         .spawn()
         .unwrap();
-    child
-        .stdin
-        .take()
-        .unwrap()
-        .write_all(input.as_bytes())
-        .unwrap();
+    // A command can reject its arguments or grants before reading stdin.
+    if let Err(error) = child.stdin.take().unwrap().write_all(input.as_bytes()) {
+        assert_eq!(error.kind(), ErrorKind::BrokenPipe, "{error}");
+    }
     child.wait_with_output().unwrap()
 }
 
