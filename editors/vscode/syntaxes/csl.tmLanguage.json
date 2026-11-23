@@ -1,0 +1,58 @@
+{
+  "name": "Cyber Sequence Language",
+  "scopeName": "source.csl",
+  "patterns": [
+    {
+      "name": "comment.line.double-slash.csl",
+      "match": "//.*$"
+    },
+    {
+      "name": "string.quoted.double.csl",
+      "begin": "\"",
+      "end": "\""
+    },
+    {
+      "match": "(?<![A-Za-z0-9_])(fun)[ \\t]+([A-Za-z_][A-Za-z0-9_]*)",
+      "captures": {
+        "1": { "name": "storage.type.function.csl" },
+        "2": { "name": "entity.name.function.csl" }
+      }
+    },
+    {
+      "name": "storage.type.csl",
+      "match": "(?<![A-Za-z0-9_])(?:fun|var)(?![A-Za-z0-9_])"
+    },
+    {
+      "name": "keyword.control.csl",
+      "match": "(?<![A-Za-z0-9_])(?:if|else|for|while|return|print)(?![A-Za-z0-9_])"
+    },
+    {
+      "name": "keyword.other.reserved.csl",
+      "match": "(?<![A-Za-z0-9_])(?:class|super|this|watch|ability|target|source|sequence|require|capability|count|by|within|alert|inspect|isolate|execute)(?![A-Za-z0-9_])"
+    },
+    {
+      "name": "constant.language.csl",
+      "match": "(?<![A-Za-z0-9_])(?:true|false|nil)(?![A-Za-z0-9_])"
+    },
+    {
+      "name": "constant.numeric.csl",
+      "match": "(?<![A-Za-z0-9_])[0-9]+(?:\\.[0-9]+)?"
+    },
+    {
+      "name": "storage.type.annotation.csl",
+      "match": "@[ \\t]*(?:doc|deprecated)(?![A-Za-z0-9_])"
+    },
+    {
+      "name": "support.function.builtin.csl",
+      "match": "(?<![A-Za-z0-9_])(?:len|typeOf)(?![A-Za-z0-9_])"
+    },
+    {
+      "name": "keyword.operator.csl",
+      "match": "(?<![A-Za-z0-9_])(?:and|or)(?![A-Za-z0-9_])|[=!<>]=?|[-+*/]"
+    },
+    {
+      "name": "entity.name.function.call.csl",
+      "match": "(?<![A-Za-z0-9_])[A-Za-z_][A-Za-z0-9_]*(?=[ \\t]*\\()"
+    }
+  ]
+}

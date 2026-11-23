@@ -1,0 +1,33 @@
+{
+  "name": "csl-language",
+  "displayName": "Cyber Sequence Language",
+  "description": "Syntax highlighting for Cyber Sequence Language (.csl).",
+  "version": "0.1.0",
+  "publisher": "dejely",
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": ["Programming Languages"],
+  "files": ["syntaxes/csl.tmLanguage.json"],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dejely/Cyber-Sequence-Language.git",
+    "directory": "editors/vscode"
+  },
+  "contributes": {
+    "languages": [
+      {
+        "id": "csl",
+        "aliases": ["Cyber Sequence Language", "CSL"],
+        "extensions": [".csl"]
+      }
+    ],
+    "grammars": [
+      {
+        "language": "csl",
+        "scopeName": "source.csl",
+        "path": "./syntaxes/csl.tmLanguage.json"
+      }
+    ]
+  }
+}
