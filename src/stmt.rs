@@ -75,7 +75,9 @@ pub struct AbilityDecl {
 #[derive(Debug, Clone, PartialEq)]
 pub enum AbilityStep {
     Alert(String),
-    Keyword(Token),
+    Inspect,
+    Isolate,
+    Execute,
     Statement(Stmt),
 }
 

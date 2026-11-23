@@ -133,7 +133,7 @@ impl Callable for RankedFunction {
     ) -> Result<Value, RuntimeError> {
         self.activation
             .borrow_mut()
-            .invoke(self.operation, &args, site, false)
+            .invoke(self.operation, &args, site)
             .map(Value::from_json)
     }
 }
@@ -190,15 +190,20 @@ pub(super) fn run(
                 activation.output.push(record);
                 Ok(())
             }
-            AbilityStep::Keyword(token) => {
-                let &(name, rank, arity) = FUNCTIONS
-                    .iter()
-                    .find(|(name, ..)| *name == token.lexeme())
-                    .expect("known sequence keyword");
-                activation
-                    .borrow_mut()
-                    .invoke(Operation { name, rank, arity }, &[], token, true)
-                    .map(|_| ())
+            AbilityStep::Inspect | AbilityStep::Isolate | AbilityStep::Execute => {
+                let mut activation = activation.borrow_mut();
+                let mut record = activation.summary.clone();
+                let name = match step {
+                    AbilityStep::Inspect => "inspect",
+                    AbilityStep::Isolate => "isolate",
+                    AbilityStep::Execute => "execute",
+                    _ => unreachable!("bare ability step"),
+                };
+                if !matches!(step, AbilityStep::Inspect) {
+                    record["simulated"] = json!(true);
+                }
+                activation.emit(name, record);
+                Ok(())
             }
             AbilityStep::Statement(statement) => interpreter
                 .execute_block(std::slice::from_ref(statement), Rc::clone(&scope))
@@ -236,7 +241,6 @@ impl Activation {
         operation: Operation,
         args: &[Value],
         site: &Token,
-        legacy_keyword: bool,
     ) -> Result<Json, RuntimeError> {
         let session = Rc::clone(&self.session);
         let mut state = session.borrow_mut();
@@ -319,7 +323,7 @@ impl Activation {
                         .as_ref()
                         .map(|name| json!({ "name": name, "steps": target.responses[name] }))
                 });
-                if response.is_none() && !legacy_keyword {
+                if response.is_none() {
                     return Err(RuntimeError::new(
                         site,
                         "This target has no approved default response.",

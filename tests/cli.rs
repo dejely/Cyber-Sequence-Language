@@ -1,22 +1,24 @@
-use std::io::Write;
+use std::io::{ErrorKind, Write};
 use std::path::Path;
 use std::process::{Command, Output, Stdio};
 
 fn run(args: &[&str], input: &str) -> Output {
+    run_in(Path::new(env!("CARGO_MANIFEST_DIR")), args, input)
+}
+
+fn run_in(directory: &Path, args: &[&str], input: &str) -> Output {
     let mut child = Command::new(env!("CARGO_BIN_EXE_cmsc124-interpreter"))
         .args(args)
-        .current_dir(env!("CARGO_MANIFEST_DIR"))
+        .current_dir(directory)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
         .unwrap();
-    child
-        .stdin
-        .take()
-        .unwrap()
-        .write_all(input.as_bytes())
-        .unwrap();
+    // A command can reject its arguments or grants before reading stdin.
+    if let Err(error) = child.stdin.take().unwrap().write_all(input.as_bytes()) {
+        assert_eq!(error.kind(), ErrorKind::BrokenPipe, "{error}");
+    }
     child.wait_with_output().unwrap()
 }
 
@@ -887,6 +889,68 @@ fn ability_replay_reports_unknown_references_before_emitting_inline_alerts() {
 }
 
 #[test]
+fn ability_steps_emit_ordered_records_for_an_authorized_target() {
+    use serde_json::json;
+
+    let directory = std::env::temp_dir().join(format!("csl-ability-steps-{}", std::process::id()));
+    std::fs::create_dir(&directory).unwrap();
+    let target = directory.join("local-report");
+    std::fs::write(&target, b"unchanged").unwrap();
+
+    let fixture = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/watch/ability_steps.csl");
+    let input = include_str!("../examples/signins.jsonl");
+    let granted = run_in(
+        &directory,
+        &[fixture, "--grant", "local-report", "report:review"],
+        input,
+    );
+    let denied = run_in(&directory, &[fixture], input);
+
+    let target_contents = std::fs::read(&target).unwrap();
+    let entries = std::fs::read_dir(&directory).unwrap().count();
+    std::fs::remove_file(target).unwrap();
+    std::fs::remove_dir(directory).unwrap();
+
+    assert_eq!(target_contents, b"unchanged");
+    assert_eq!(entries, 1);
+    assert!(
+        granted.status.success(),
+        "{}",
+        String::from_utf8_lossy(&granted.stderr)
+    );
+    assert!(granted.stderr.is_empty());
+    let records: Vec<serde_json::Value> = std::str::from_utf8(&granted.stdout)
+        .unwrap()
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect();
+    let expected: Vec<_> = [
+        json!({"step":"inspect", "target":"local-report"}),
+        json!({"step":"isolate", "target":"local-report", "simulated":true}),
+        json!({"step":"alert", "message":"Review repeated sign-in failures"}),
+        json!({"step":"execute", "target":"local-report", "simulated":true}),
+    ]
+    .into_iter()
+    .map(|step| {
+        let mut record = json!({
+            "rule":"failedSignIns", "source":"signins", "kind":"failed_signin",
+            "group_key":"ana", "timestamp":40, "count":3,
+        });
+        record
+            .as_object_mut()
+            .unwrap()
+            .extend(step.as_object().unwrap().clone());
+        record
+    })
+    .collect();
+    assert_eq!(records, expected);
+
+    assert_eq!(denied.status.code(), Some(70));
+    assert!(denied.stdout.is_empty());
+    assert!(String::from_utf8_lossy(&denied.stderr).contains("requires grant"));
+}
+
+#[test]
 fn ranked_abilities_return_trigger_data_and_keep_simulations_and_incidents_target_scoped() {
     use serde_json::json;
 
@@ -994,61 +1058,40 @@ fn ranked_abilities_return_trigger_data_and_keep_simulations_and_incidents_targe
 }
 
 #[test]
-fn authorized_keyword_steps_emit_in_order_and_enforce_rank() {
-    let file = "tests/watch/simulation_steps.csl";
-    let events = include_str!("../examples/signins.jsonl");
-    let grants = ["--grant", "workstation", "report:review"];
-    let output = run(&[&[file][..], &grants, &["--rank", "2"]].concat(), events);
-    assert!(
-        output.status.success(),
-        "{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    let records: Vec<serde_json::Value> = std::str::from_utf8(&output.stdout)
-        .unwrap()
-        .lines()
-        .map(|line| serde_json::from_str(line).unwrap())
-        .collect();
-    let steps: Vec<_> = records
-        .iter()
-        .map(|record| record["step"].as_str().unwrap())
-        .collect();
-    assert_eq!(
-        steps,
-        [
-            "inspection",
-            "alert",
-            "simulated_isolate",
-            "simulated_execute"
-        ]
-    );
-    for record in [&records[0], &records[2], &records[3]] {
-        assert_eq!(record["target"], "workstation");
-        assert_eq!(record["timestamp"], 40);
-    }
-
-    let denied = run(&[file, "--rank", "2"], "not an event\n");
-    assert_eq!(denied.status.code(), Some(70));
-    assert!(denied.stdout.is_empty());
-    assert!(String::from_utf8_lossy(&denied.stderr).contains("requires grant"));
-
-    let ranks = [
+fn ranked_function_calls_enforce_their_sequence() {
+    let events = include_str!("watch/ranked_events.jsonl");
+    for (rank, function, required) in [
         ("7", "inspect", 6),
-        ("6", "isolate", 3),
-        ("3", "execute", 2),
-    ];
-    for (rank, operation, needed) in ranks {
-        let denied = run(&[&[file][..], &grants, &["--rank", rank]].concat(), events);
-        assert_eq!(denied.status.code(), Some(70));
+        ("6", "targetInfo", 3),
+        ("3", "listApprovedResponses", 2),
+        ("2", "openIncident", 1),
+    ] {
+        let output = run(
+            &[
+                "tests/watch/ranked.csl",
+                "--rank",
+                rank,
+                "--grant",
+                "workstation",
+                "report:review",
+                "--grant",
+                "other",
+                "report:review",
+                "--policy",
+                "tests/watch/ranked_policy.json",
+            ],
+            events,
+        );
+        assert_eq!(output.status.code(), Some(70));
         assert!(
-            String::from_utf8_lossy(&denied.stderr)
-                .contains(&format!("{operation} requires Sequence {needed}"))
+            String::from_utf8_lossy(&output.stderr)
+                .contains(&format!("{function} requires Sequence {required}"))
         );
     }
 }
 
 #[test]
-fn response_calls_require_a_configured_default_and_sequence_one_gates_incidents() {
+fn response_calls_require_a_configured_default() {
     let no_policy = run(
         &[
             "tests/watch/response_default.csl",
@@ -1063,23 +1106,4 @@ fn response_calls_require_a_configured_default_and_sequence_one_gates_incidents(
     assert_eq!(no_policy.status.code(), Some(70));
     assert!(no_policy.stdout.is_empty());
     assert!(String::from_utf8_lossy(&no_policy.stderr).contains("no approved default response"));
-
-    let file = "tests/watch/ranked.csl";
-    let events = include_str!("watch/ranked_events.jsonl");
-    let args = [
-        file,
-        "--grant",
-        "workstation",
-        "report:review",
-        "--grant",
-        "other",
-        "report:review",
-        "--rank",
-        "2",
-        "--policy",
-        "tests/watch/ranked_policy.json",
-    ];
-    let denied = run(&args, events);
-    assert_eq!(denied.status.code(), Some(70));
-    assert!(String::from_utf8_lossy(&denied.stderr).contains("openIncident requires Sequence 1"));
 }

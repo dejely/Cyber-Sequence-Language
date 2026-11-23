@@ -110,17 +110,10 @@ impl Parser {
         while !self.check(&TokenType::RightBrace) && !self.is_at_end() {
             let step = if self.match_token(&[TokenType::Alert]) {
                 AbilityStep::Alert(self.alert_message()?)
-            } else if matches!(
-                self.peek().token_type(),
-                TokenType::Inspect | TokenType::Isolate | TokenType::Execute
-            ) && self
-                .tokens
-                .get(self.current + 1)
-                .is_some_and(|next| next.token_type() == &TokenType::Semicolon)
-            {
-                let keyword = self.advance().clone();
+            } else if let Some(step) = self.bare_ability_step() {
+                self.advance(); // keyword
                 self.advance(); // semicolon
-                AbilityStep::Keyword(keyword)
+                step
             } else if self.match_token(&[TokenType::Var]) {
                 AbilityStep::Statement(self.var_declaration(Vec::new())?)
             } else {
@@ -133,6 +126,18 @@ impl Parser {
         }
         self.consume(&TokenType::RightBrace, "Expect '}' after ability sequence.")?;
         Ok(steps)
+    }
+
+    fn bare_ability_step(&self) -> Option<AbilityStep> {
+        if self.tokens.get(self.current + 1)?.token_type() != &TokenType::Semicolon {
+            return None;
+        }
+        match self.peek().token_type() {
+            TokenType::Inspect => Some(AbilityStep::Inspect),
+            TokenType::Isolate => Some(AbilityStep::Isolate),
+            TokenType::Execute => Some(AbilityStep::Execute),
+            _ => None,
+        }
     }
 
     fn ability_input(&mut self, label: &str) -> Result<String, String> {

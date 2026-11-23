@@ -429,9 +429,9 @@ declared by a watch. A missing or empty grouping field contributes no count.
 
 At time `t`, a watch counts matching events after `t - window` through `t`,
 separately for each group. Each crossing from below the threshold emits one
-JSON record per alert. A group can trigger again once enough earlier
+JSON records from the sequence. A group can trigger again once enough earlier
 events expire. Invalid input reports its line number on stderr and exits with
-status 70. Alerts already written remain available.
+status 70. Records already written remain available.
 
 ### Named abilities
 
@@ -451,6 +451,12 @@ the order they are written.
 Repeat `--grant TARGET CAPABILITY` to authorize several pairs. Each referenced
 ability needs an exact match for both its target and capability in a single
 grant. Replay resolves and checks every named reference before reading events.
+
+In a named ability, `inspect;` emits a summary with the authorized `target`
+and the trigger's `rule`, `source`, event `kind`, `group_key`, `timestamp`,
+and `count`. The `isolate;` and `execute;` steps emit those same fields
+with their respective `step` names and `"simulated": true`. These intents
+only write JSON records to stdout. All records follow the sequence's source order.
 
 #### Ranked ability functions
 
@@ -499,10 +505,9 @@ Incident review moves from open to in review. Escalation can follow either
 state, and any active incident can be closed. A containment reason applies to
 the current trigger and updates its latest pending containment intent.
 
-The shorthand statements `inspect;`, `isolate;`, and `execute;` use the
-same rank restrictions. `execute;` can record a generic simulation without a
-configured default response. All containment and response operations only
-emit local simulation records.
+The bare steps `inspect;`, `isolate;`, and `execute;` use the ability's
+grant and emit summaries or simulation records. The ranked calls
+`isolate()` and `execute()` also create session-local intents with IDs.
 
 Run the ranked replay fixture with both targets authorized:
 

@@ -1,16 +1,16 @@
-watch investigate {
+watch failedSignIns {
     source "signins";
     count "failed_signin" by "account" within 60 >= 3;
-    sequence review;
+    sequence respondToSignIns;
 }
 
-ability review {
-    target "workstation";
+ability respondToSignIns {
+    target "local-report";
     require capability "report:review";
     sequence {
         inspect;
-        alert "Check the account";
         isolate;
+        alert "Review repeated sign-in failures";
         execute;
     }
 }
