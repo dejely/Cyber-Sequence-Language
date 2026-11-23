@@ -656,3 +656,26 @@ fn parse_mode_prints_calls_and_logical_operators_in_postfix() {
         b"> f 1.0 call/1 2.0 a b c and or call/2\n> f call/0\n> "
     );
 }
+
+#[test]
+fn script_files_validate_watches_before_execution() {
+    let valid = run(&["tests/watch/inline_alerts.csl"], "");
+    assert_eq!(valid.status.code(), Some(70));
+    assert!(valid.stdout.is_empty());
+    assert_eq!(
+        valid.stderr,
+        b"[line 2] Runtime error at 'failedSignIns': Watch execution is not available yet.\n"
+    );
+
+    let invalid = run(&["tests/watch/invalid_clauses.csl"], "");
+    assert_eq!(invalid.status.code(), Some(65));
+    assert!(invalid.stdout.is_empty());
+    assert_eq!(
+        invalid.stderr,
+        concat!(
+            "[line 4] Error at '0': The window in seconds must be a positive 32-bit unsigned integer.\n",
+            "[line 9] Error at 'source': Expect 'count' after the source clause.\n"
+        )
+        .as_bytes()
+    );
+}

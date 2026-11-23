@@ -1,10 +1,19 @@
 //! Recursive descent parser for expressions and programs, with semicolon recovery.
 
+mod watch;
+
+use std::collections::HashSet;
 use std::rc::Rc;
 
 use crate::expr::Expr;
-use crate::stmt::{Annotation, FunctionDecl, Stmt};
+use crate::stmt::{Annotation, FunctionDecl, Stmt, WatchDecl};
 use crate::token::{Literal, Token, TokenType};
+
+#[derive(Debug, Default)]
+pub struct Program {
+    pub statements: Vec<Stmt>,
+    pub watches: Vec<WatchDecl>,
+}
 
 pub struct Parser {
     tokens: Vec<Token>,
@@ -70,26 +79,54 @@ impl Parser {
 
     /// Script mode requires a semicolon after declarations, prints, and expressions.
     /// Parse everything before execution so syntax errors cannot cause side effects.
-    pub fn parse_program(&mut self) -> Result<Vec<Stmt>, String> {
-        self.statement_list(false)
+    pub fn parse_program(&mut self) -> Result<Program, String> {
+        let mut program = Program::default();
+        let mut watch_names = HashSet::new();
+        let mut errors = Vec::new();
+        while !self.is_at_end() {
+            let start = self.current;
+            if self.check(&TokenType::Watch) {
+                match self.watch_declaration() {
+                    Ok(watch) if watch_names.insert(watch.name.lexeme().to_owned()) => {
+                        program.watches.push(watch);
+                    }
+                    Ok(watch) => errors.push(Self::error_at(&watch.name, "Duplicate watch name.")),
+                    Err(message) => {
+                        errors.push(message);
+                        self.synchronize_watch(start);
+                    }
+                }
+            } else {
+                match self.declaration() {
+                    Ok(statement) => program.statements.push(statement),
+                    Err(message) => {
+                        errors.push(message);
+                        self.synchronize_statement(start, false);
+                    }
+                }
+            }
+        }
+        if errors.is_empty() {
+            Ok(program)
+        } else {
+            Err(errors.join("\n"))
+        }
     }
 
-    fn statement_list(&mut self, in_block: bool) -> Result<Vec<Stmt>, String> {
+    fn block_statements(&mut self) -> Result<Vec<Stmt>, String> {
         let mut statements = Vec::new();
         let mut errors = Vec::new();
-        while !self.is_at_end() && !(in_block && self.check(&TokenType::RightBrace)) {
+        while !self.is_at_end() && !self.check(&TokenType::RightBrace) {
             let start = self.current;
             match self.declaration() {
                 Ok(statement) => statements.push(statement),
                 Err(message) => {
                     errors.push(message);
-                    self.synchronize_statement(start, in_block);
+                    self.synchronize_statement(start, true);
                 }
             }
         }
-        if in_block
-            && let Err(message) = self.consume(&TokenType::RightBrace, "Expect '}' after block.")
-        {
+        if let Err(message) = self.consume(&TokenType::RightBrace, "Expect '}' after block.") {
             errors.push(message);
         }
         if errors.is_empty() {
@@ -223,13 +260,16 @@ impl Parser {
         self.consume(&TokenType::RightParen, "Expect ')' after parameters.")?;
         self.consume(&TokenType::LeftBrace, "Expect '{' before function body.")?;
         self.function_depth += 1;
-        let body = self.statement_list(true);
+        let body = self.block_statements();
         self.function_depth -= 1;
         let body = body?;
         Ok(Stmt::Function(Rc::new(FunctionDecl { name, params, body })))
     }
 
     fn statement(&mut self) -> Result<Stmt, String> {
+        if self.check(&TokenType::Watch) {
+            return Err(self.error("'watch' declarations must be at the top level."));
+        }
         if self.match_token(&[TokenType::If]) {
             return self.if_statement();
         }
@@ -240,7 +280,7 @@ impl Parser {
             return self.for_statement();
         }
         if self.match_token(&[TokenType::LeftBrace]) {
-            return self.statement_list(true).map(Stmt::Block);
+            return self.block_statements().map(Stmt::Block);
         }
         if self.match_token(&[TokenType::Return]) {
             if self.function_depth == 0 {
@@ -600,8 +640,11 @@ impl Parser {
     }
 
     fn error(&self, message: &str) -> String {
-        let token = self.peek();
-        let location = if self.is_at_end() {
+        Self::error_at(self.peek(), message)
+    }
+
+    fn error_at(token: &Token, message: &str) -> String {
+        let location = if token.token_type() == &TokenType::Eof {
             " at end".to_string()
         } else {
             format!(" at '{}'", token.lexeme())
@@ -637,7 +680,7 @@ impl Parser {
             {
                 return;
             }
-            if self.at_statement_keyword() {
+            if self.at_statement_keyword() || (!in_block && self.check(&TokenType::Watch)) {
                 return;
             }
             match self.peek().token_type() {
@@ -664,6 +707,7 @@ mod tests {
         Parser::new(Scanner::new(source.to_string()).scan_tokens().unwrap())
             .parse_program()
             .unwrap()
+            .statements
     }
 
     #[test]
