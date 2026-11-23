@@ -370,6 +370,32 @@ Evaluation file runtime errors use exit 70; the evaluation REPL continues after 
 CSL source files use `.csl`, matching `tests/lab1/manifest.json`. The Lab 0
 fixture retains its `.src` filename, but contains ordinary CSL source.
 
+### Editor syntax highlighting
+
+The packages in `editors/` associate `.csl` files with CSL. Run the setup
+commands from the repository root.
+
+For VS Code, preview the extension in an Extension Development Host:
+
+```sh
+code --extensionDevelopmentPath="$PWD/editors/vscode" examples/lab5/sign_in_summary.csl
+```
+
+To install it in your regular VS Code profile, build and install the VSIX:
+
+```sh
+(cd editors/vscode && npx @vscode/vsce package --out /tmp/csl-language.vsix)
+code --install-extension /tmp/csl-language.vsix
+```
+
+For Neovim, link the package under the `site/pack/csl/start` subdirectory of
+`:echo stdpath('data')` and restart Neovim. On a default Linux installation:
+
+```sh
+mkdir -p ~/.local/share/nvim/site/pack/csl/start
+ln -s "$PWD/editors/nvim" ~/.local/share/nvim/site/pack/csl/start/csl
+```
+
 ## Lexical structure
 
 Scanning is handwritten, character by character, without regular expressions.
