@@ -1,11 +1,13 @@
 //! Replay normalized events through CSL watches and write alert records.
 
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::io::{self, BufRead, Write};
 
 use serde::{Deserialize, Serialize};
 
-use crate::stmt::WatchDecl;
+use crate::stmt::{AbilityDecl, WatchDecl, WatchSequence};
+
+pub type Grants<'a> = HashSet<(&'a str, &'a str)>;
 
 #[derive(Deserialize)]
 struct InputEvent {
@@ -36,6 +38,7 @@ struct SourceState<'a> {
 
 struct RuleState<'a> {
     rule: &'a WatchDecl,
+    alerts: &'a [String],
     timestamps: VecDeque<(i64, String)>,
     counts: HashMap<String, usize>,
 }
@@ -103,7 +106,7 @@ impl SourceState<'_> {
         let mut emitted = false;
         for state in &mut self.rules {
             if let Some((group_key, count)) = state.apply(event) {
-                for message in &state.rule.alerts {
+                for message in state.alerts {
                     let record = AlertRecord {
                         rule: state.rule.name.lexeme(),
                         source,
@@ -129,20 +132,54 @@ impl SourceState<'_> {
 
 pub fn replay(
     watches: &[WatchDecl],
+    abilities: &[AbilityDecl],
+    grants: &Grants<'_>,
     input: impl BufRead,
     mut output: impl Write,
 ) -> io::Result<()> {
+    let abilities: HashMap<_, _> = abilities
+        .iter()
+        .map(|ability| (ability.name.lexeme(), ability))
+        .collect();
     let mut sources: HashMap<&str, SourceState<'_>> = HashMap::new();
     for rule in watches {
+        // Resolve and authorize every named sequence before reading any event.
+        let alerts = match &rule.sequence {
+            WatchSequence::Inline(alerts) => alerts,
+            WatchSequence::Named(reference) => {
+                let name = reference.lexeme();
+                let line = reference.line();
+                let ability = abilities.get(name).ok_or_else(|| {
+                    io::Error::new(
+                        io::ErrorKind::InvalidInput,
+                        format!("[line {line}] Unknown ability '{name}'."),
+                    )
+                })?;
+                if !grants.contains(&(ability.target.as_str(), ability.capability.as_str())) {
+                    return Err(io::Error::new(
+                        io::ErrorKind::PermissionDenied,
+                        format!(
+                            "[line {line}] Ability '{name}' requires grant {:?} for target {:?}.",
+                            ability.capability, ability.target
+                        ),
+                    ));
+                }
+                &ability.alerts
+            }
+        };
         sources
             .entry(&rule.source)
             .or_default()
             .rules
             .push(RuleState {
                 rule,
+                alerts,
                 timestamps: VecDeque::new(),
                 counts: HashMap::new(),
             });
+    }
+    if sources.is_empty() {
+        return Ok(());
     }
     let default_source = if sources.len() == 1 {
         sources.keys().next().copied()

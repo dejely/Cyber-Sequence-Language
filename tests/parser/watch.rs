@@ -1,6 +1,6 @@
 use crate::parser::{Parser, Program};
 use crate::scanner::Scanner;
-use crate::stmt::Stmt;
+use crate::stmt::{Stmt, WatchSequence};
 
 fn parse(source: &str) -> Result<Program, String> {
     Parser::new(Scanner::new(source.into()).scan_tokens().unwrap()).parse_program()
@@ -30,10 +30,46 @@ fn preserves_watch_fields_alert_order_and_script_statements() {
     assert_eq!(rule.group_field, "account");
     assert_eq!(rule.window, 60);
     assert_eq!(rule.threshold, 3);
+    let WatchSequence::Inline(alerts) = &rule.sequence else {
+        panic!("expected inline sequence");
+    };
     assert_eq!(
-        rule.alerts,
-        ["Review repeated sign-in failures", "Check the account"]
+        alerts,
+        &["Review repeated sign-in failures", "Check the account"]
     );
+}
+
+#[test]
+fn rejects_duplicate_abilities_and_invalid_grant_names() {
+    let fixture = include_str!("../../examples/review-signins.csl");
+    let declaration = fixture.split_once("ability reviewSignIns").unwrap().1;
+    let duplicate = format!("{fixture}\nability reviewSignIns{declaration}");
+    assert!(
+        parse(&duplicate)
+            .unwrap_err()
+            .contains("Duplicate ability name.")
+    );
+    assert!(
+        parse(&format!("{{ ability reviewSignIns{declaration} }}"))
+            .unwrap_err()
+            .contains("'ability' declarations must be at the top level.")
+    );
+
+    for (original, invalid, label) in [
+        ("target \"local-report\";", "target \"  \";", "target name"),
+        (
+            "capability \"report:review\";",
+            "capability \"--grant\";",
+            "capability name",
+        ),
+    ] {
+        let program = fixture.replace(original, invalid);
+        assert!(
+            parse(&program)
+                .unwrap_err()
+                .contains(&format!("Invalid {label}."))
+        );
+    }
 }
 
 #[test]

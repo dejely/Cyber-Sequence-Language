@@ -47,12 +47,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         [flag, filename] if flag == "--tokenize" => (filename, FileMode::Tokenize),
         [flag, filename] if flag == "--parse" => (filename, FileMode::Parse),
-        [filename] if !filename.starts_with('-') => (filename, FileMode::Execute),
+        [filename, options @ ..]
+            if !filename.starts_with('-')
+                && options.first().is_none_or(|option| option == "--grant") =>
+        {
+            (filename, FileMode::Execute)
+        }
         _ => {
             return Err(
-                "Usage: ./run [--repl | --parse [file] | --eval [file] | --tokenize <file> | <file>]".into(),
+                "Usage: ./run [--repl | --parse [file] | --eval [file] | --tokenize <file> | <file> [--grant <target> <capability>]...]".into(),
             );
         }
+    };
+    let grants = if matches!(mode, FileMode::Execute) {
+        parse_grants(&args[2..])?
+    } else {
+        watch::Grants::new()
     };
     let source = std::fs::read_to_string(filename)?;
 
@@ -68,14 +78,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     if matches!(mode, FileMode::Execute) {
         match Parser::new(tokens).parse_program() {
             Ok(program) => {
-                if !program.watches.is_empty() {
+                if !program.watches.is_empty() || !program.abilities.is_empty() {
                     if !program.statements.is_empty() {
-                        eprintln!("A watch file accepts only watch declarations.");
+                        eprintln!("A watch file accepts only watch and ability declarations.");
                         std::process::exit(65);
                     }
                     let input = std::io::stdin().lock();
                     let output = std::io::stdout().lock();
-                    if let Err(error) = watch::replay(&program.watches, input, output) {
+                    if let Err(error) =
+                        watch::replay(&program.watches, &program.abilities, &grants, input, output)
+                    {
                         eprintln!("{error}");
                         std::process::exit(70);
                     }
@@ -123,4 +135,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     Ok(())
+}
+
+fn parse_grants(args: &[String]) -> Result<watch::Grants<'_>, String> {
+    let mut grants = watch::Grants::new();
+    for option in args.chunks(3) {
+        let [flag, target, capability] = option else {
+            return Err("Expected --grant <target> <capability>.".into());
+        };
+        if flag != "--grant"
+            || !stmt::valid_grant_name(target)
+            || !stmt::valid_grant_name(capability)
+        {
+            return Err(
+                "Expected --grant <target> <capability> with nonblank target and capability."
+                    .into(),
+            );
+        }
+        grants.insert((target.as_str(), capability.as_str()));
+    }
+    Ok(grants)
 }
