@@ -659,12 +659,12 @@ fn parse_mode_prints_calls_and_logical_operators_in_postfix() {
 
 #[test]
 fn script_files_validate_watches_before_execution() {
-    let valid = run(&["tests/watch/inline_alerts.csl"], "");
-    assert_eq!(valid.status.code(), Some(70));
-    assert!(valid.stdout.is_empty());
+    let mixed = run(&["tests/watch/inline_alerts.csl"], "");
+    assert_eq!(mixed.status.code(), Some(65));
+    assert!(mixed.stdout.is_empty());
     assert_eq!(
-        valid.stderr,
-        b"[line 2] Runtime error at 'failedSignIns': Watch execution is not available yet.\n"
+        mixed.stderr,
+        b"A watch file accepts only watch declarations.\n"
     );
 
     let invalid = run(&["tests/watch/invalid_clauses.csl"], "");
@@ -678,4 +678,113 @@ fn script_files_validate_watches_before_execution() {
         )
         .as_bytes()
     );
+}
+
+#[test]
+fn watch_replay_tracks_rule_and_group_windows_and_emits_ordered_alerts() {
+    use serde_json::json;
+
+    let output = run(
+        &["tests/watch/replay.csl"],
+        include_str!("watch/replay.jsonl"),
+    );
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(output.stderr.is_empty());
+    let actual: Vec<serde_json::Value> = std::str::from_utf8(&output.stdout)
+        .unwrap()
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect();
+    let mut expected = vec![json!({
+        "rule": "otherSource", "source": "backup", "kind": "failed_signin",
+        "group_key": "ana", "timestamp": -10, "count": 1, "step": "alert",
+        "message": "Backup source"
+    })];
+    for (group, timestamp) in [("ana", 61), ("bob", 71), ("ana", 123)] {
+        for (rule, message) in [
+            ("failedSignIns", "Review sign-ins"),
+            ("failedSignIns", "Check the account"),
+            ("corroborate", "Record crossing"),
+        ] {
+            expected.push(json!({
+                "rule": rule, "source": "signins", "kind": "failed_signin",
+                "group_key": group, "timestamp": timestamp, "count": 3,
+                "step": "alert", "message": message
+            }));
+        }
+    }
+    assert_eq!(actual, expected);
+}
+
+#[test]
+fn watch_replay_infers_the_only_source_and_keeps_alerts_before_an_input_error() {
+    let valid_input = include_str!("../examples/signins.jsonl");
+    let args = ["examples/failed-signins.csl"];
+    let valid = run(&args, valid_input);
+    assert!(
+        valid.status.success(),
+        "{}",
+        String::from_utf8_lossy(&valid.stderr)
+    );
+    let alert: serde_json::Value = serde_json::from_slice(&valid.stdout).unwrap();
+    assert_eq!(alert["timestamp"], 40);
+    assert_eq!(alert["source"], "signins");
+
+    let invalid = run(&args, &format!("{valid_input}\n{{invalid json}}\n"));
+    assert_eq!(invalid.status.code(), Some(70));
+    assert_eq!(invalid.stdout, valid.stdout);
+    assert!(
+        String::from_utf8(invalid.stderr)
+            .unwrap()
+            .starts_with("Event input line 5:")
+    );
+}
+
+#[test]
+fn watch_replay_rejects_invalid_events_with_their_input_line() {
+    let args = ["tests/watch/replay.csl"];
+    for (event, message) in [
+        (
+            r#"{"kind":"failed_signin","timestamp":2}"#,
+            "must name its source",
+        ),
+        (
+            r#"{"source":"unknown","kind":"failed_signin","timestamp":2}"#,
+            "unknown event source",
+        ),
+        (
+            r#"{"source":"signins","kind":"","timestamp":2}"#,
+            "event kind must be nonempty",
+        ),
+        (
+            r#"{"source":"signins","kind":"failed_signin","timestamp":1}"#,
+            "received timestamp 1 after 2",
+        ),
+        (
+            r#"{"source":"signins","kind":"failed_signin","timestamp":2.5}"#,
+            "expected i64",
+        ),
+        (
+            r#"{"source":"signins","kind":"failed_signin","timestamp":2,"fields":{"account":8}}"#,
+            "expected a string",
+        ),
+        (
+            r#"["signins","failed_signin",2,{"account":"ana"}]"#,
+            "expected a JSON event object",
+        ),
+    ] {
+        let input = format!(
+            "{{\"source\":\"signins\",\"kind\":\"failed_signin\",\"timestamp\":2}}\n\n{event}\n"
+        );
+        let output = run(&args, &input);
+        assert_eq!(output.status.code(), Some(70), "{event}");
+        assert!(output.stdout.is_empty(), "{event}");
+        let stderr = String::from_utf8(output.stderr).unwrap();
+        assert!(stderr.starts_with("Event input line 3:"), "{stderr}");
+        assert!(stderr.contains(message), "{stderr}");
+    }
 }

@@ -412,8 +412,26 @@ watch failedSignIns {
 ```
 
 Watch names must be unique in a file. Windows and thresholds must be positive
-integers up to 4,294,967,295. File mode validates watch syntax and reports that
-execution is pending. Event replay is tracked in issue #62.
+integers up to 4,294,967,295. A watch file contains only watch declarations.
+
+Replay recorded events from standard input:
+
+```sh
+./build.sh
+./run examples/failed-signins.csl < examples/signins.jsonl
+```
+
+Each nonblank input line is a JSON object with an event `kind`, an integer
+`timestamp` in seconds, and optional `fields` containing string values.
+Timestamps must be nondecreasing within each source. You can omit `source` if
+all watches use the same source. Otherwise, every event must name a source
+declared by a watch. A missing or empty grouping field contributes no count.
+
+At time `t`, a watch counts matching events after `t - window` through `t`,
+separately for each group. Each crossing from below the threshold emits one
+JSON record per inline alert. A group can trigger again once enough earlier
+events expire. Invalid input reports its line number on stderr and exits with
+status 70. Alerts already written remain available.
 
 ## Lexical structure
 

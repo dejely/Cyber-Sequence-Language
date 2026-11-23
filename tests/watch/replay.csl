@@ -1,0 +1,20 @@
+watch failedSignIns {
+    source "signins";
+    count "failed_signin" by "account" within 60 >= 3;
+    sequence {
+        alert "Review sign-ins";
+        alert "Check the account";
+    }
+}
+
+watch corroborate {
+    source "signins";
+    count "failed_signin" by "account" within 60 >= 3;
+    sequence { alert "Record crossing"; }
+}
+
+watch otherSource {
+    source "backup";
+    count "failed_signin" by "account" within 60 >= 1;
+    sequence { alert "Backup source"; }
+}
