@@ -396,6 +396,25 @@ mkdir -p ~/.local/share/nvim/site/pack/csl/start
 ln -s "$PWD/editors/nvim" ~/.local/share/nvim/site/pack/csl/start/csl
 ```
 
+### Watch declarations
+
+A top-level watch declares a named source, a grouped count over a time window
+in seconds, and one or more inline alerts.
+
+```csl
+watch failedSignIns {
+    source "signins";
+    count "failed_signin" by "account" within 60 >= 3;
+    sequence {
+        alert "Review repeated sign-in failures";
+    }
+}
+```
+
+Watch names must be unique in a file. Windows and thresholds must be positive
+integers up to 4,294,967,295. File mode validates watch syntax and reports that
+execution is pending. Event replay is tracked in issue #62.
+
 ## Lexical structure
 
 Scanning is handwritten, character by character, without regular expressions.
@@ -407,7 +426,8 @@ All token categories are defined in [src/token.rs](src/token.rs); scanning is in
 
 The words below are recognized now. Their purposes describe intended semantics;
 `print` and `var` execute statements; `true`, `false`, and `nil` are literals.
-The remaining keywords are reserved for future forms.
+See [Watch declarations](#watch-declarations) for the domain-specific form
+currently accepted by the parser.
 
 | Lexeme   | Token Type | Purpose                           |
 | -------- | ---------- | --------------------------------- |
