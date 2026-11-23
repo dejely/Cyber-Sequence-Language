@@ -399,7 +399,7 @@ ln -s "$PWD/editors/nvim" ~/.local/share/nvim/site/pack/csl/start/csl
 ### Watch declarations
 
 A top-level watch declares a named source, a grouped count over a time window
-in seconds, and one or more inline alerts.
+in seconds, and an inline alert sequence or a named ability.
 
 ```csl
 watch failedSignIns {
@@ -412,7 +412,7 @@ watch failedSignIns {
 ```
 
 Watch names must be unique in a file. Windows and thresholds must be positive
-integers up to 4,294,967,295. A watch file contains only watch declarations.
+integers up to 4,294,967,295. A watch file contains only watch and ability declarations.
 
 Replay recorded events from standard input:
 
@@ -429,9 +429,30 @@ declared by a watch. A missing or empty grouping field contributes no count.
 
 At time `t`, a watch counts matching events after `t - window` through `t`,
 separately for each group. Each crossing from below the threshold emits one
-JSON record per inline alert. A group can trigger again once enough earlier
+JSON record per alert. A group can trigger again once enough earlier
 events expire. Invalid input reports its line number on stderr and exits with
 status 70. Alerts already written remain available.
+
+### Named abilities
+
+Declare a reusable sequence with `ability`, a `target` string, and a
+`require capability` string. A watch can refer to an ability by name with
+`sequence reviewSignIns;`, including an ability declared later in the file.
+Ability names must be unique.
+
+[The named ability example](examples/review-signins.csl) runs two alerts in
+the order they are written.
+
+```sh
+./build.sh
+./run examples/review-signins.csl --grant local-report report:review < examples/signins.jsonl
+```
+
+Repeat `--grant TARGET CAPABILITY` to authorize several pairs. Each referenced
+ability needs an exact match for both its target and capability in a single
+grant. Replay resolves and checks every named reference before reading events.
+See [issue #64](https://github.com/dejely/Cyber-Sequence-Language/issues/64)
+for the inspection and simulation steps.
 
 ## Lexical structure
 
