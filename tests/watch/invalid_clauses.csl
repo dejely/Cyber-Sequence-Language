@@ -1,0 +1,12 @@
+print "must not execute";
+watch badWindow {
+    source "signins";
+    count "failed_signin" by "account" within 0 >= 3;
+    sequence { alert "Review sign-ins"; }
+}
+watch repeatedSource {
+    source "signins";
+    source "other";
+    count "failed_signin" by "account" within 60 >= 3;
+    sequence { alert "Review sign-ins"; }
+}

@@ -66,8 +66,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut interpreter = evaluator::Interpreter::default();
     if matches!(mode, FileMode::Execute) {
         match Parser::new(tokens).parse_program() {
-            Ok(statements) => {
-                for statement in statements {
+            Ok(program) => {
+                if let Some(watch) = program.watches.first() {
+                    eprintln!(
+                        "[line {}] Runtime error at '{}': Watch execution is not available yet.",
+                        watch.name.line(),
+                        watch.name.lexeme()
+                    );
+                    std::process::exit(70);
+                }
+                for statement in program.statements {
                     if let Err(message) = interpreter.execute(&statement) {
                         eprintln!("{message}");
                         std::process::exit(70);

@@ -1,0 +1,10 @@
+var result = 42;
+watch failedSignIns {
+    source "signins";
+    count "failed_signin" by "account" within 60 >= 3;
+    sequence {
+        alert "Review repeated sign-in failures";
+        alert "Check the account";
+    }
+}
+print result;

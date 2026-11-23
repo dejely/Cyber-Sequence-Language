@@ -45,3 +45,15 @@ pub struct FunctionDecl {
     pub params: Vec<Token>,
     pub body: Vec<Stmt>,
 }
+
+/// A top-level event rule, separate from executable script statements.
+#[derive(Debug, Clone, PartialEq)]
+pub struct WatchDecl {
+    pub name: Token,
+    pub source: String,
+    pub kind: String,
+    pub group_field: String,
+    pub window: u32,
+    pub threshold: u32,
+    pub alerts: Vec<String>,
+}
