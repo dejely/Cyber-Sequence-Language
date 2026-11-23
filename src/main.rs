@@ -10,6 +10,7 @@ mod scanner;
 mod stmt;
 mod token;
 mod value;
+mod watch;
 
 use parser::Parser;
 use scanner::Scanner;
@@ -67,13 +68,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     if matches!(mode, FileMode::Execute) {
         match Parser::new(tokens).parse_program() {
             Ok(program) => {
-                if let Some(watch) = program.watches.first() {
-                    eprintln!(
-                        "[line {}] Runtime error at '{}': Watch execution is not available yet.",
-                        watch.name.line(),
-                        watch.name.lexeme()
-                    );
-                    std::process::exit(70);
+                if !program.watches.is_empty() {
+                    if !program.statements.is_empty() {
+                        eprintln!("A watch file accepts only watch declarations.");
+                        std::process::exit(65);
+                    }
+                    let input = std::io::stdin().lock();
+                    let output = std::io::stdout().lock();
+                    if let Err(error) = watch::replay(&program.watches, input, output) {
+                        eprintln!("{error}");
+                        std::process::exit(70);
+                    }
+                    return Ok(());
                 }
                 for statement in program.statements {
                     if let Err(message) = interpreter.execute(&statement) {

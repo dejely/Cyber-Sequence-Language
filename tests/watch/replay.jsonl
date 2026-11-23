@@ -1,0 +1,17 @@
+{"source":"signins","kind":"failed_signin","timestamp":0,"fields":{"account":"ana"}}
+{"source":"signins","kind":"failed_signin","timestamp":20,"fields":{"account":"bob"}}
+{"source":"backup","kind":"failed_signin","timestamp":-10,"fields":{"account":"ana"}}
+{"source":"signins","kind":"failed_signin","timestamp":30,"fields":{"account":"ana"}}
+{"source":"signins","kind":"success","timestamp":50,"fields":{"account":"ana"}}
+{"source":"signins","kind":"failed_signin","timestamp":60,"fields":{"account":"ana"}}
+{"source":"signins","kind":"failed_signin","timestamp":60,"fields":{"account":""}}
+{"source":"signins","kind":"failed_signin","timestamp":60}
+
+{"source":"signins","kind":"failed_signin","timestamp":61,"fields":{"account":"ana"}}
+{"source":"signins","kind":"failed_signin","timestamp":62,"fields":{"account":"ana"}}
+{"source":"signins","kind":"failed_signin","timestamp":70,"fields":{"account":"bob"}}
+{"source":"signins","kind":"failed_signin","timestamp":71,"fields":{"account":"bob"}}
+{"source":"signins","kind":"success","timestamp":120,"fields":{"account":"ana"}}
+{"source":"signins","kind":"failed_signin","timestamp":121,"fields":{"account":"ana"}}
+{"source":"signins","kind":"failed_signin","timestamp":122,"fields":{"account":"ana"}}
+{"source":"signins","kind":"failed_signin","timestamp":123,"fields":{"account":"ana"}}
