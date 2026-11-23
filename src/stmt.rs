@@ -55,5 +55,25 @@ pub struct WatchDecl {
     pub group_field: String,
     pub window: u32,
     pub threshold: u32,
+    pub sequence: WatchSequence,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum WatchSequence {
+    Inline(Vec<String>),
+    Named(Token),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct AbilityDecl {
+    pub name: Token,
+    pub target: String,
+    pub capability: String,
     pub alerts: Vec<String>,
+}
+
+/// Grant names are passed as CLI operands, which must be nonblank and distinct
+/// from the option marker.
+pub fn valid_grant_name(name: &str) -> bool {
+    !name.trim().is_empty() && name != "--grant"
 }

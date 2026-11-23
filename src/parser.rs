@@ -6,13 +6,14 @@ use std::collections::HashSet;
 use std::rc::Rc;
 
 use crate::expr::Expr;
-use crate::stmt::{Annotation, FunctionDecl, Stmt, WatchDecl};
+use crate::stmt::{AbilityDecl, Annotation, FunctionDecl, Stmt, WatchDecl};
 use crate::token::{Literal, Token, TokenType};
 
 #[derive(Debug, Default)]
 pub struct Program {
     pub statements: Vec<Stmt>,
     pub watches: Vec<WatchDecl>,
+    pub abilities: Vec<AbilityDecl>,
 }
 
 pub struct Parser {
@@ -82,6 +83,7 @@ impl Parser {
     pub fn parse_program(&mut self) -> Result<Program, String> {
         let mut program = Program::default();
         let mut watch_names = HashSet::new();
+        let mut ability_names = HashSet::new();
         let mut errors = Vec::new();
         while !self.is_at_end() {
             let start = self.current;
@@ -93,7 +95,20 @@ impl Parser {
                     Ok(watch) => errors.push(Self::error_at(&watch.name, "Duplicate watch name.")),
                     Err(message) => {
                         errors.push(message);
-                        self.synchronize_watch(start);
+                        self.synchronize_domain_declaration(start);
+                    }
+                }
+            } else if self.check(&TokenType::Ability) {
+                match self.ability_declaration() {
+                    Ok(ability) if ability_names.insert(ability.name.lexeme().to_owned()) => {
+                        program.abilities.push(ability);
+                    }
+                    Ok(ability) => {
+                        errors.push(Self::error_at(&ability.name, "Duplicate ability name."))
+                    }
+                    Err(message) => {
+                        errors.push(message);
+                        self.synchronize_domain_declaration(start);
                     }
                 }
             } else {
@@ -267,8 +282,11 @@ impl Parser {
     }
 
     fn statement(&mut self) -> Result<Stmt, String> {
-        if self.check(&TokenType::Watch) {
-            return Err(self.error("'watch' declarations must be at the top level."));
+        if self.at_domain_declaration() {
+            return Err(self.error(&format!(
+                "'{}' declarations must be at the top level.",
+                self.peek().lexeme()
+            )));
         }
         if self.match_token(&[TokenType::If]) {
             return self.if_statement();
@@ -680,7 +698,7 @@ impl Parser {
             {
                 return;
             }
-            if self.at_statement_keyword() || (!in_block && self.check(&TokenType::Watch)) {
+            if self.at_statement_keyword() || (!in_block && self.at_domain_declaration()) {
                 return;
             }
             match self.peek().token_type() {

@@ -454,8 +454,7 @@ fn repl_executes_conditionals_as_statements_without_echoing() {
 
 #[test]
 fn program_recovery_restarts_at_if_statements() {
-    let path =
-        std::env::temp_dir().join(format!("cmsc124-if-recovery-{}.csl", std::process::id()));
+    let path = std::env::temp_dir().join(format!("cmsc124-if-recovery-{}.csl", std::process::id()));
     std::fs::write(&path, "var a = 1\nif (a) print ;\nif a print 1;\n").unwrap();
     let output = run(&[path.to_str().unwrap()], "");
     std::fs::remove_file(path).unwrap();
@@ -664,7 +663,7 @@ fn script_files_validate_watches_before_execution() {
     assert!(mixed.stdout.is_empty());
     assert_eq!(
         mixed.stderr,
-        b"A watch file accepts only watch declarations.\n"
+        b"A watch file accepts only watch and ability declarations.\n"
     );
 
     let invalid = run(&["tests/watch/invalid_clauses.csl"], "");
@@ -787,4 +786,102 @@ fn watch_replay_rejects_invalid_events_with_their_input_line() {
         assert!(stderr.starts_with("Event input line 3:"), "{stderr}");
         assert!(stderr.contains(message), "{stderr}");
     }
+}
+
+#[test]
+fn ability_replay_resolves_forward_references_and_preserves_step_order() {
+    let output = run(
+        &[
+            "examples/review-signins.csl",
+            "--grant",
+            "another-target",
+            "report:review",
+            "--grant",
+            "local-report",
+            "report:review",
+        ],
+        include_str!("../examples/signins.jsonl"),
+    );
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(output.stderr.is_empty());
+    let records: Vec<serde_json::Value> = std::str::from_utf8(&output.stdout)
+        .unwrap()
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect();
+    assert_eq!(records.len(), 2);
+    assert_eq!(records[0]["message"], "Review repeated sign-in failures");
+    assert_eq!(records[1]["message"], "Check the account");
+    for record in records {
+        assert_eq!(record["rule"], "failedSignIns");
+        assert_eq!(record["timestamp"], 40);
+    }
+}
+
+#[test]
+fn ability_replay_denies_missing_or_mismatched_grants_before_reading_events() {
+    let file = "examples/review-signins.csl";
+    for args in [
+        vec![file],
+        vec![
+            file,
+            "--grant",
+            "local-report",
+            "report:other",
+            "--grant",
+            "another-target",
+            "report:review",
+        ],
+    ] {
+        let output = run(&args, "not an event\n");
+        assert_eq!(output.status.code(), Some(70));
+        assert!(output.stdout.is_empty());
+        let diagnostic = String::from_utf8(output.stderr).unwrap();
+        assert!(diagnostic.contains(
+            "Ability 'reviewSignIns' requires grant \"report:review\" for target \"local-report\"."
+        ));
+        assert!(!diagnostic.contains("Event input line"));
+    }
+
+    for args in [
+        vec![file, "--grant", "local-report"],
+        vec![file, "--grant", "local-report", ""],
+        vec![file, "--grant", "   ", "report:review"],
+        vec![file, "--grant", "local-report", "--grant"],
+    ] {
+        let output = run(&args, "not an event\n");
+        assert_eq!(output.status.code(), Some(1));
+        assert!(output.stdout.is_empty());
+        assert!(
+            String::from_utf8(output.stderr)
+                .unwrap()
+                .contains("Expected --grant")
+        );
+    }
+}
+
+#[test]
+fn ability_replay_reports_unknown_references_before_emitting_inline_alerts() {
+    let file = std::env::temp_dir().join(format!("csl-unknown-ability-{}.csl", std::process::id()));
+    let inline = include_str!("../examples/failed-signins.csl");
+    let named = include_str!("../examples/review-signins.csl")
+        .replace("watch failedSignIns", "watch namedWatch")
+        .replace("sequence reviewSignIns;", "sequence missing;");
+    std::fs::write(&file, format!("{inline}\n{named}")).unwrap();
+    let output = run(
+        &[file.to_str().unwrap()],
+        include_str!("../examples/signins.jsonl"),
+    );
+    std::fs::remove_file(file).unwrap();
+    assert_eq!(output.status.code(), Some(70));
+    assert!(output.stdout.is_empty());
+    assert!(
+        String::from_utf8(output.stderr)
+            .unwrap()
+            .contains("Unknown ability 'missing'.")
+    );
 }

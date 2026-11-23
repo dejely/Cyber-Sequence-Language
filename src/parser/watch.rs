@@ -1,5 +1,5 @@
 use super::Parser;
-use crate::stmt::WatchDecl;
+use crate::stmt::{AbilityDecl, WatchDecl, WatchSequence};
 use crate::token::{Literal, TokenType};
 
 impl Parser {
@@ -31,20 +31,18 @@ impl Parser {
             &TokenType::Sequence,
             "Expect 'sequence' after the count clause.",
         )?;
-        self.consume(&TokenType::LeftBrace, "Expect '{' after 'sequence'.")?;
-        let mut alerts = Vec::new();
-        loop {
-            self.consume(&TokenType::Alert, "Expect 'alert' in the watch sequence.")?;
-            alerts.push(self.watch_string("alert message")?);
-            self.consume(&TokenType::Semicolon, "Expect ';' after alert message.")?;
-            if !self.check(&TokenType::Alert) {
-                break;
-            }
-        }
-        self.consume(
-            &TokenType::RightBrace,
-            "Expect 'alert' or '}' after alert step.",
-        )?;
+        let sequence = if self.check(&TokenType::LeftBrace) {
+            WatchSequence::Inline(self.alert_sequence()?)
+        } else {
+            let reference = self
+                .consume(
+                    &TokenType::Identifier,
+                    "Expect a sequence block or ability name.",
+                )?
+                .clone();
+            self.consume(&TokenType::Semicolon, "Expect ';' after ability name.")?;
+            WatchSequence::Named(reference)
+        };
         self.consume(
             &TokenType::RightBrace,
             "Expect '}' after watch declaration.",
@@ -57,8 +55,79 @@ impl Parser {
             group_field,
             window,
             threshold,
+            sequence,
+        })
+    }
+
+    pub(super) fn ability_declaration(&mut self) -> Result<AbilityDecl, String> {
+        self.advance(); // ability
+        let name = self
+            .consume(&TokenType::Identifier, "Expect an ability name.")?
+            .clone();
+        self.consume(&TokenType::LeftBrace, "Expect '{' after ability name.")?;
+
+        self.consume(
+            &TokenType::Target,
+            "Expect 'target' as the first ability clause.",
+        )?;
+        let target = self.ability_input("target name")?;
+        self.consume(&TokenType::Semicolon, "Expect ';' after target name.")?;
+
+        self.consume(
+            &TokenType::Require,
+            "Expect 'require' after the target clause.",
+        )?;
+        self.consume(
+            &TokenType::Capability,
+            "Expect 'capability' after 'require'.",
+        )?;
+        let capability = self.ability_input("capability name")?;
+        self.consume(&TokenType::Semicolon, "Expect ';' after capability name.")?;
+
+        self.consume(
+            &TokenType::Sequence,
+            "Expect 'sequence' after the capability clause.",
+        )?;
+        let alerts = self.alert_sequence()?;
+        self.consume(
+            &TokenType::RightBrace,
+            "Expect '}' after ability declaration.",
+        )?;
+        Ok(AbilityDecl {
+            name,
+            target,
+            capability,
             alerts,
         })
+    }
+
+    fn ability_input(&mut self, label: &str) -> Result<String, String> {
+        let input = self.watch_string(label)?;
+        if !crate::stmt::valid_grant_name(&input) {
+            return Err(Self::error_at(
+                self.previous(),
+                &format!("Invalid {label}."),
+            ));
+        }
+        Ok(input)
+    }
+
+    fn alert_sequence(&mut self) -> Result<Vec<String>, String> {
+        self.consume(&TokenType::LeftBrace, "Expect '{' after 'sequence'.")?;
+        let mut alerts = Vec::new();
+        loop {
+            self.consume(&TokenType::Alert, "Expect 'alert' in the sequence.")?;
+            alerts.push(self.watch_string("alert message")?);
+            self.consume(&TokenType::Semicolon, "Expect ';' after alert message.")?;
+            if !self.check(&TokenType::Alert) {
+                break;
+            }
+        }
+        self.consume(
+            &TokenType::RightBrace,
+            "Expect 'alert' or '}' after alert step.",
+        )?;
+        Ok(alerts)
     }
 
     fn watch_string(&mut self, label: &str) -> Result<String, String> {
@@ -86,8 +155,15 @@ impl Parser {
         }
     }
 
-    pub(super) fn synchronize_watch(&mut self, start: usize) {
-        // The watch parser can only fail before consuming its closing brace.
+    pub(super) fn at_domain_declaration(&self) -> bool {
+        matches!(
+            self.peek().token_type(),
+            TokenType::Watch | TokenType::Ability
+        )
+    }
+
+    pub(super) fn synchronize_domain_declaration(&mut self, start: usize) {
+        // A failed domain declaration has not consumed its closing brace.
         let mut depth = 0;
         for token in &self.tokens[start..self.current] {
             match token.token_type() {
@@ -100,8 +176,8 @@ impl Parser {
             self.synchronize_statement(start, false);
             return;
         }
-        // A new watch can still be parsed if a closing brace is missing.
-        while !self.is_at_end() && !self.check(&TokenType::Watch) {
+        // A new declaration can still be parsed if a closing brace is missing.
+        while !self.is_at_end() && !self.at_domain_declaration() {
             match self.advance().token_type() {
                 TokenType::LeftBrace => depth += 1,
                 TokenType::RightBrace => {
@@ -151,10 +227,46 @@ mod tests {
         assert_eq!(rule.group_field, "account");
         assert_eq!(rule.window, 60);
         assert_eq!(rule.threshold, 3);
+        let WatchSequence::Inline(alerts) = &rule.sequence else {
+            panic!("expected inline sequence");
+        };
         assert_eq!(
-            rule.alerts,
-            ["Review repeated sign-in failures", "Check the account"]
+            alerts,
+            &["Review repeated sign-in failures", "Check the account"]
         );
+    }
+
+    #[test]
+    fn rejects_duplicate_abilities_and_invalid_grant_names() {
+        let fixture = include_str!("../../examples/review-signins.csl");
+        let declaration = fixture.split_once("ability reviewSignIns").unwrap().1;
+        let duplicate = format!("{fixture}\nability reviewSignIns{declaration}");
+        assert!(
+            parse(&duplicate)
+                .unwrap_err()
+                .contains("Duplicate ability name.")
+        );
+        assert!(
+            parse(&format!("{{ ability reviewSignIns{declaration} }}"))
+                .unwrap_err()
+                .contains("'ability' declarations must be at the top level.")
+        );
+
+        for (original, invalid, label) in [
+            ("target \"local-report\";", "target \"  \";", "target name"),
+            (
+                "capability \"report:review\";",
+                "capability \"--grant\";",
+                "capability name",
+            ),
+        ] {
+            let program = fixture.replace(original, invalid);
+            assert!(
+                parse(&program)
+                    .unwrap_err()
+                    .contains(&format!("Invalid {label}."))
+            );
+        }
     }
 
     #[test]
