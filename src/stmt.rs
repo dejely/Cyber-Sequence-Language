@@ -69,7 +69,15 @@ pub struct AbilityDecl {
     pub name: Token,
     pub target: String,
     pub capability: String,
-    pub alerts: Vec<String>,
+    pub steps: Vec<AbilityStep>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum AbilityStep {
+    Alert(String),
+    Inspect,
+    Isolate,
+    Execute,
 }
 
 /// Grant names are passed as CLI operands, which must be nonblank and distinct

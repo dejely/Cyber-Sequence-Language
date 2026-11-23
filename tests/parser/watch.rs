@@ -126,3 +126,11 @@ fn requires_complete_top_level_watches_with_unique_names() {
     let nested = parse(&format!("{{ {valid} }}")).unwrap_err();
     assert!(nested.contains("'watch' declarations must be at the top level."));
 }
+
+#[test]
+fn inline_sequences_reject_steps_that_require_an_ability() {
+    for step in ["inspect", "isolate", "execute"] {
+        let source = watch("rule", "60", "3").replace("alert \"hit\";", &format!("{step};"));
+        assert!(parse(&source).unwrap_err().contains("Expect 'alert'"));
+    }
+}
