@@ -1,0 +1,13 @@
+watch responseWatch {
+    source "signins";
+    count "failed_signin" by "account" within 60 >= 3;
+    sequence respond;
+}
+
+ability respond {
+    target "workstation";
+    require capability "report:review";
+    sequence {
+        execute();
+    }
+}

@@ -98,6 +98,7 @@ impl fmt::Display for Function {
 pub(crate) enum NativeFunction {
     Len,
     TypeOf,
+    Get,
 }
 
 impl NativeFunction {
@@ -105,13 +106,14 @@ impl NativeFunction {
         match self {
             Self::Len => "len",
             Self::TypeOf => "typeOf",
+            Self::Get => "get",
         }
     }
 }
 
 impl Callable for NativeFunction {
     fn arity(&self) -> usize {
-        1
+        if matches!(self, Self::Get) { 2 } else { 1 }
     }
 
     fn call(
@@ -125,6 +127,14 @@ impl Callable for NativeFunction {
         match self {
             Self::Len => match argument {
                 Value::String(text) => Ok(Value::Number(text.chars().count() as f64)),
+                Value::Data(data) => {
+                    let length = data
+                        .as_array()
+                        .map(Vec::len)
+                        .or_else(|| data.as_object().map(serde_json::Map::len))
+                        .expect("data values are arrays or objects");
+                    Ok(Value::Number(length as f64))
+                }
                 _ => Err(RuntimeError::new(call_site, "len expects a string.")),
             },
             Self::TypeOf => {
@@ -133,9 +143,38 @@ impl Callable for NativeFunction {
                     Value::String(_) => "string",
                     Value::Boolean(_) => "boolean",
                     Value::Nil => "nil",
+                    Value::Data(data) if data.is_array() => "list",
+                    Value::Data(_) => "object",
                     Value::Callable(_) => "function",
                 };
                 Ok(Value::String(name.to_owned()))
+            }
+            Self::Get => {
+                let Value::Data(data) = argument else {
+                    return Err(RuntimeError::new(
+                        call_site,
+                        "get expects a list or object.",
+                    ));
+                };
+                let value = match &arguments[1] {
+                    Value::String(key) if data.is_object() => data.get(key),
+                    Value::Number(index)
+                        if data.is_array()
+                            && index.fract() == 0.0
+                            && (0.0..=9_007_199_254_740_991.0).contains(index) =>
+                    {
+                        usize::try_from(*index as u64)
+                            .ok()
+                            .and_then(|index| data.get(index))
+                    }
+                    _ => {
+                        return Err(RuntimeError::new(
+                            call_site,
+                            "get expects a string key for an object or a nonnegative integer index for a list.",
+                        ));
+                    }
+                };
+                Ok(value.cloned().map_or(Value::Nil, Value::from_json))
             }
         }
     }

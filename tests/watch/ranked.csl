@@ -1,0 +1,73 @@
+watch accountReview {
+    source "signins";
+    count "failed_signin" by "account" within 60 >= 3;
+    sequence account;
+}
+
+watch otherReview {
+    source "signins";
+    count "other" by "account" within 60 >= 1;
+    sequence otherTarget;
+}
+
+ability account {
+    target "workstation";
+    require capability "report:review";
+    sequence {
+        inspect();
+        var summary = triggerSummary();
+        var matches = matchedEvents();
+        var timeline = eventTimeline();
+        var report = exportReport();
+
+        var targetDetails = targetInfo();
+        var impact = previewImpact();
+        recordContainmentReason("Account review");
+        var containment = isolate();
+        recordContainmentReason("Manual review");
+        var canceledContainment = cancelContainmentIntent(containment);
+
+        var names = listApprovedResponses();
+        var preview = previewResponse("review");
+        var response = execute();
+        var pending = responseResult(response);
+        var canceledResponse = cancelResponseIntent(response);
+        var canceled = responseResult(response);
+
+        var incident = openIncident();
+        attachEvidence(incident, report);
+        attachEvidence(incident, get(summary, "count"));
+        attachEvidence(incident, matches == timeline);
+        attachEvidence(incident, get(targetDetails, "metadata"));
+        attachEvidence(incident, get(impact, "impact"));
+        attachEvidence(incident, canceledContainment);
+        attachEvidence(incident, names);
+        attachEvidence(incident, preview);
+        attachEvidence(incident, pending);
+        attachEvidence(incident, canceledResponse);
+        attachEvidence(incident, canceled);
+        requestReview(incident);
+        escalateIncident(incident);
+        closeIncident(incident);
+        attachEvidence(incident, "Too late");
+
+        isolate();
+        execute();
+        openIncident();
+    }
+}
+
+ability otherTarget {
+    target "other";
+    require capability "report:review";
+    sequence {
+        var incident = openIncident();
+        attachEvidence(incident, responseResult("response-5"));
+        attachEvidence(incident, cancelContainmentIntent("containment-4"));
+        attachEvidence(incident, cancelResponseIntent("response-5"));
+        attachEvidence(incident, attachEvidence("incident-6", "Cross-target"));
+        attachEvidence(incident, requestReview("incident-6"));
+        attachEvidence(incident, escalateIncident("incident-6"));
+        attachEvidence(incident, closeIncident("incident-6"));
+    }
+}

@@ -62,6 +62,10 @@ impl Default for Interpreter {
 }
 
 impl Interpreter {
+    pub(crate) fn child_scope(&self) -> SharedEnvironment {
+        Environment::enclosed(Rc::clone(&self.environment))
+    }
+
     /// Evaluate left before right; `?` propagates the first runtime error.
     pub fn evaluate(&mut self, expression: &Expr) -> Result<Value, RuntimeError> {
         match expression {

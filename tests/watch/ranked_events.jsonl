@@ -1,0 +1,6 @@
+{"kind":"failed_signin","timestamp":0,"fields":{"account":"ana"}}
+{"kind":"failed_signin","timestamp":1,"fields":{"account":"bob"}}
+{"kind":"failed_signin","timestamp":30,"fields":{"account":"ana"}}
+{"kind":"failed_signin","timestamp":60,"fields":{"account":"ana"}}
+{"kind":"failed_signin","timestamp":61,"fields":{"account":"ana"}}
+{"kind":"other","timestamp":62,"fields":{"account":"ana"}}

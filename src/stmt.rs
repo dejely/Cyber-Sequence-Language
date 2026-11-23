@@ -78,10 +78,11 @@ pub enum AbilityStep {
     Inspect,
     Isolate,
     Execute,
+    Statement(Stmt),
 }
 
 /// Grant names are passed as CLI operands, which must be nonblank and distinct
-/// from the option marker.
+/// from replay option markers.
 pub fn valid_grant_name(name: &str) -> bool {
-    !name.trim().is_empty() && name != "--grant"
+    !name.trim().is_empty() && !matches!(name, "--grant" | "--rank" | "--policy")
 }

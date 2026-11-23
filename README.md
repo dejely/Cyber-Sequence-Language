@@ -429,7 +429,7 @@ declared by a watch. A missing or empty grouping field contributes no count.
 
 At time `t`, a watch counts matching events after `t - window` through `t`,
 separately for each group. Each crossing from below the threshold emits one
-JSON record per step. A group can trigger again once enough earlier
+JSON records from the sequence. A group can trigger again once enough earlier
 events expire. Invalid input reports its line number on stderr and exits with
 status 70. Records already written remain available.
 
@@ -451,11 +451,72 @@ the order they are written.
 Repeat `--grant TARGET CAPABILITY` to authorize several pairs. Each referenced
 ability needs an exact match for both its target and capability in a single
 grant. Replay resolves and checks every named reference before reading events.
+
 In a named ability, `inspect;` emits a summary with the authorized `target`
 and the trigger's `rule`, `source`, event `kind`, `group_key`, `timestamp`,
 and `count`. The `isolate;` and `execute;` steps emit those same fields
 with their respective `step` names and `"simulated": true`. These intents
 only write JSON records to stdout. All records follow the sequence's source order.
+
+#### Ranked ability functions
+
+Inside an ability sequence, use `var` to save results and call functions with
+ordinary CSL expression syntax. The host supplies `--rank` (default `9`) and
+the exact target/capability grant. Lower rank numbers unlock more functions.
+For example, Sequence 2 can use the Sequence 2, 3, and 6 sets listed below.
+
+| Required rank | Functions |
+| --- | --- |
+| 6 | `inspect()`, `triggerSummary()`, `matchedEvents()`, `eventTimeline()`, `exportReport()` |
+| 3 | `targetInfo()`, `isolate()`, `previewImpact()`, `recordContainmentReason(reason)`, `cancelContainmentIntent(id)` |
+| 2 | `listApprovedResponses()`, `previewResponse(name)`, `execute()`, `responseResult(id)`, `cancelResponseIntent(id)` |
+| 1 | `openIncident()`, `attachEvidence(id, evidence)`, `requestReview(id)`, `escalateIncident(id)`, `closeIncident(id)` |
+
+The summary identifies the rule, source, group, trigger time, count, and
+authorized target. Both event functions return the current group's matches in
+timestamp order. `inspect()` and `exportReport()` also emit JSON Lines records.
+Use `get(value, key)` for an object or `get(value, index)` for a zero-based list.
+Both return `nil` for an absent key or index.
+
+For each authorized target, a local `--policy <file>` may supply metadata,
+containment impact, and response descriptions. A response definition is a list
+of text steps. The `default_response` must name one of those definitions for
+`execute()` to create its simulation record. The policy file provides these
+descriptions. The CLI grant authorizes the ability.
+
+```json
+{
+  "targets": {
+    "workstation": {
+      "metadata": { "label": "Workstation" },
+      "containment_impact": { "network": "simulated" },
+      "responses": { "review": ["Record for review"] },
+      "default_response": "review"
+    }
+  }
+}
+```
+
+`isolate()`, `execute()`, and `openIncident()` return local IDs. The records
+live for the replay session and are accessible to authorized abilities for
+the same target. A missing or out-of-scope response lookup returns `nil`.
+Cancellation and incident update functions return whether they changed a record.
+Incident review moves from open to in review. Escalation can follow either
+state, and any active incident can be closed. A containment reason applies to
+the current trigger and updates its latest pending containment intent.
+
+The bare steps `inspect;`, `isolate;`, and `execute;` use the ability's
+grant and emit summaries or simulation records. The ranked calls
+`isolate()` and `execute()` also create session-local intents with IDs.
+
+Run the ranked replay fixture with both targets authorized:
+
+```sh
+./build.sh
+./run tests/watch/ranked.csl --rank 1 --policy tests/watch/ranked_policy.json \
+  --grant workstation report:review --grant other report:review \
+  < tests/watch/ranked_events.jsonl
+```
 
 ## Lexical structure
 
@@ -975,7 +1036,8 @@ and arity checks.
 | `len(text)` | 1 | number | Counts Unicode scalar values in a string. A different argument type produces a runtime error. |
 | `typeOf(value)` | 1 | string | Returns `"number"`, `"string"`, `"boolean"`, `"nil"`, or `"function"`. |
 
-The domain-specific `inspect`, `isolate`, and `execute` keywords remain reserved.
+See [ranked ability functions](#ranked-ability-functions) for natives available
+inside named replay abilities.
 
 ## Errors and diagnostics
 
