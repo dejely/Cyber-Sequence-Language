@@ -1,11 +1,11 @@
-//! Replay normalized events through CSL watches and write alert records.
+//! Replay normalized events through CSL watches and write sequence step records.
 
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::io::{self, BufRead, Write};
 
 use serde::{Deserialize, Serialize};
 
-use crate::stmt::{AbilityDecl, WatchDecl, WatchSequence};
+use crate::stmt::{AbilityDecl, AbilityStep, WatchDecl, WatchSequence};
 
 pub type Grants<'a> = HashSet<(&'a str, &'a str)>;
 
@@ -19,15 +19,70 @@ struct InputEvent {
 }
 
 #[derive(Serialize)]
-struct AlertRecord<'a> {
+struct TriggerRecord<'a> {
     rule: &'a str,
     source: &'a str,
     kind: &'a str,
     group_key: &'a str,
     timestamp: i64,
     count: usize,
-    step: &'static str,
-    message: &'a str,
+}
+
+#[derive(Serialize)]
+struct ReplayRecord<'a> {
+    #[serde(flatten)]
+    trigger: &'a TriggerRecord<'a>,
+    #[serde(flatten)]
+    step: StepRecord<'a>,
+}
+
+#[derive(Serialize)]
+#[serde(tag = "step", rename_all = "lowercase")]
+enum StepRecord<'a> {
+    Alert { message: &'a str },
+    Inspect { target: &'a str },
+    Isolate { target: &'a str, simulated: bool },
+    Execute { target: &'a str, simulated: bool },
+}
+
+enum ResolvedSequence<'a> {
+    Inline(&'a [String]),
+    Ability(&'a AbilityDecl),
+}
+
+impl ResolvedSequence<'_> {
+    fn emit(&self, trigger: &TriggerRecord<'_>, output: &mut impl Write) -> io::Result<()> {
+        let mut write_step = |step| {
+            serde_json::to_writer(&mut *output, &ReplayRecord { trigger, step })?;
+            writeln!(output)
+        };
+        match self {
+            Self::Inline(alerts) => {
+                for message in *alerts {
+                    write_step(StepRecord::Alert { message })?;
+                }
+            }
+            Self::Ability(ability) => {
+                let target = ability.target.as_str();
+                for step in &ability.steps {
+                    let record = match step {
+                        AbilityStep::Alert(message) => StepRecord::Alert { message },
+                        AbilityStep::Inspect => StepRecord::Inspect { target },
+                        AbilityStep::Isolate => StepRecord::Isolate {
+                            target,
+                            simulated: true,
+                        },
+                        AbilityStep::Execute => StepRecord::Execute {
+                            target,
+                            simulated: true,
+                        },
+                    };
+                    write_step(record)?;
+                }
+            }
+        }
+        Ok(())
+    }
 }
 
 #[derive(Default)]
@@ -38,7 +93,7 @@ struct SourceState<'a> {
 
 struct RuleState<'a> {
     rule: &'a WatchDecl,
-    alerts: &'a [String],
+    sequence: ResolvedSequence<'a>,
     timestamps: VecDeque<(i64, String)>,
     counts: HashMap<String, usize>,
 }
@@ -106,21 +161,16 @@ impl SourceState<'_> {
         let mut emitted = false;
         for state in &mut self.rules {
             if let Some((group_key, count)) = state.apply(event) {
-                for message in state.alerts {
-                    let record = AlertRecord {
-                        rule: state.rule.name.lexeme(),
-                        source,
-                        kind: &event.kind,
-                        group_key,
-                        timestamp: event.timestamp,
-                        count,
-                        step: "alert",
-                        message,
-                    };
-                    serde_json::to_writer(&mut *output, &record)?;
-                    writeln!(output)?;
-                    emitted = true;
-                }
+                let trigger = TriggerRecord {
+                    rule: state.rule.name.lexeme(),
+                    source,
+                    kind: &event.kind,
+                    group_key,
+                    timestamp: event.timestamp,
+                    count,
+                };
+                state.sequence.emit(&trigger, output)?;
+                emitted = true;
             }
         }
         if emitted {
@@ -144,8 +194,8 @@ pub fn replay(
     let mut sources: HashMap<&str, SourceState<'_>> = HashMap::new();
     for rule in watches {
         // Resolve and authorize every named sequence before reading any event.
-        let alerts = match &rule.sequence {
-            WatchSequence::Inline(alerts) => alerts,
+        let sequence = match &rule.sequence {
+            WatchSequence::Inline(alerts) => ResolvedSequence::Inline(alerts),
             WatchSequence::Named(reference) => {
                 let name = reference.lexeme();
                 let line = reference.line();
@@ -164,7 +214,7 @@ pub fn replay(
                         ),
                     ));
                 }
-                &ability.alerts
+                ResolvedSequence::Ability(ability)
             }
         };
         sources
@@ -173,7 +223,7 @@ pub fn replay(
             .rules
             .push(RuleState {
                 rule,
-                alerts,
+                sequence,
                 timestamps: VecDeque::new(),
                 counts: HashMap::new(),
             });

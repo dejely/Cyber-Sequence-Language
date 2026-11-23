@@ -1,5 +1,5 @@
 use super::Parser;
-use crate::stmt::{AbilityDecl, WatchDecl, WatchSequence};
+use crate::stmt::{AbilityDecl, AbilityStep, WatchDecl, WatchSequence};
 use crate::token::{Literal, TokenType};
 
 impl Parser {
@@ -88,7 +88,7 @@ impl Parser {
             &TokenType::Sequence,
             "Expect 'sequence' after the capability clause.",
         )?;
-        let alerts = self.alert_sequence()?;
+        let steps = self.ability_sequence()?;
         self.consume(
             &TokenType::RightBrace,
             "Expect '}' after ability declaration.",
@@ -97,7 +97,7 @@ impl Parser {
             name,
             target,
             capability,
-            alerts,
+            steps,
         })
     }
 
@@ -117,8 +117,7 @@ impl Parser {
         let mut alerts = Vec::new();
         loop {
             self.consume(&TokenType::Alert, "Expect 'alert' in the sequence.")?;
-            alerts.push(self.watch_string("alert message")?);
-            self.consume(&TokenType::Semicolon, "Expect ';' after alert message.")?;
+            alerts.push(self.alert_message()?);
             if !self.check(&TokenType::Alert) {
                 break;
             }
@@ -128,6 +127,39 @@ impl Parser {
             "Expect 'alert' or '}' after alert step.",
         )?;
         Ok(alerts)
+    }
+
+    fn ability_sequence(&mut self) -> Result<Vec<AbilityStep>, String> {
+        self.consume(&TokenType::LeftBrace, "Expect '{' after 'sequence'.")?;
+        let mut steps = Vec::new();
+        loop {
+            steps.push(self.ability_step()?);
+            if self.match_token(&[TokenType::RightBrace]) {
+                return Ok(steps);
+            }
+        }
+    }
+
+    fn ability_step(&mut self) -> Result<AbilityStep, String> {
+        let step = match self.peek().token_type() {
+            TokenType::Alert => {
+                self.advance();
+                return self.alert_message().map(AbilityStep::Alert);
+            }
+            TokenType::Inspect => AbilityStep::Inspect,
+            TokenType::Isolate => AbilityStep::Isolate,
+            TokenType::Execute => AbilityStep::Execute,
+            _ => return Err(self.error("Expect 'alert', 'inspect', 'isolate', or 'execute'.")),
+        };
+        self.advance();
+        self.consume(&TokenType::Semicolon, "Expect ';' after ability step.")?;
+        Ok(step)
+    }
+
+    fn alert_message(&mut self) -> Result<String, String> {
+        let message = self.watch_string("alert message")?;
+        self.consume(&TokenType::Semicolon, "Expect ';' after alert message.")?;
+        Ok(message)
     }
 
     fn watch_string(&mut self, label: &str) -> Result<String, String> {
