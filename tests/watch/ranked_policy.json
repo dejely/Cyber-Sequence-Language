@@ -1,0 +1,10 @@
+{
+  "targets": {
+    "workstation": {
+      "metadata": { "label": "Workstation" },
+      "containment_impact": { "network": "simulated" },
+      "responses": { "review": ["Record for review"] },
+      "default_response": "review"
+    }
+  }
+}

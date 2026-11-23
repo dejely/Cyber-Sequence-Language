@@ -885,3 +885,201 @@ fn ability_replay_reports_unknown_references_before_emitting_inline_alerts() {
             .contains("Unknown ability 'missing'.")
     );
 }
+
+#[test]
+fn ranked_abilities_return_trigger_data_and_keep_simulations_and_incidents_target_scoped() {
+    use serde_json::json;
+
+    let output = run(
+        &[
+            "tests/watch/ranked.csl",
+            "--grant",
+            "workstation",
+            "report:review",
+            "--rank",
+            "1",
+            "--grant",
+            "other",
+            "report:review",
+            "--policy",
+            "tests/watch/ranked_policy.json",
+        ],
+        include_str!("watch/ranked_events.jsonl"),
+    );
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(output.stderr.is_empty());
+    let records: Vec<serde_json::Value> = std::str::from_utf8(&output.stdout)
+        .unwrap()
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect();
+    assert_eq!(records[0]["step"], "inspection");
+    assert_eq!(records[0]["target"], "workstation");
+    assert_eq!(records[0]["rule"], "accountReview");
+    assert_eq!(records[0]["group_key"], "ana");
+    assert_eq!(records[0]["timestamp"], 61);
+    assert_eq!(records[0]["count"], 3);
+    let report = &records[1];
+    assert_eq!(report["step"], "report");
+    let events = report["events"].as_array().unwrap();
+    assert_eq!(events.len(), 3);
+    for (event, timestamp) in events.iter().zip([30, 60, 61]) {
+        assert_eq!(event["timestamp"], timestamp);
+        assert_eq!(event["fields"]["account"], "ana");
+    }
+    assert_eq!(records[2]["step"], "simulated_isolate");
+    assert_eq!(records[2]["id"], "containment-1");
+    assert_eq!(records[2]["reason"], "Account review");
+    assert_eq!(records[3]["reason"], "Manual review");
+    assert_eq!(records[4]["status"], "canceled");
+    assert_eq!(records[5]["step"], "simulated_execute");
+    assert_eq!(records[5]["id"], "response-2");
+    assert_eq!(
+        records[5]["response"]["steps"],
+        json!(["Record for review"])
+    );
+    assert_eq!(records[6]["status"], "canceled");
+
+    let changes: Vec<_> = records
+        .iter()
+        .filter(|record| record["id"] == "incident-3")
+        .collect();
+    assert_eq!(changes.first().unwrap()["status"], "open");
+    let final_states: Vec<_> = changes[changes.len() - 3..]
+        .iter()
+        .map(|record| record["status"].as_str().unwrap())
+        .collect();
+    assert_eq!(final_states, ["in_review", "escalated", "closed"]);
+    let evidence = changes.last().unwrap()["evidence"].as_array().unwrap();
+    assert_eq!(
+        evidence,
+        &[
+            report.clone(),
+            json!(3.0),
+            json!(true),
+            json!({"label":"Workstation"}),
+            json!({"network":"simulated"}),
+            json!(true),
+            json!(["review"]),
+            json!({"target":"workstation", "name":"review","steps":["Record for review"]}),
+            records[5].clone(),
+            json!(true),
+            {
+                let mut result = records[5].clone();
+                result["status"] = json!("canceled");
+                result
+            }
+        ]
+    );
+    for (id, status) in [
+        ("containment-4", "pending"),
+        ("response-5", "pending"),
+        ("incident-6", "open"),
+    ] {
+        let matching: Vec<_> = records.iter().filter(|record| record["id"] == id).collect();
+        assert_eq!(matching.len(), 1, "{id}");
+        assert_eq!(matching[0]["status"], status);
+    }
+    let other_target = records.last().unwrap();
+    assert_eq!(other_target["id"], "incident-7");
+    assert_eq!(other_target["target"], "other");
+    assert_eq!(
+        other_target["evidence"],
+        json!([null, false, false, false, false, false, false])
+    );
+}
+
+#[test]
+fn authorized_keyword_steps_emit_in_order_and_enforce_rank() {
+    let file = "tests/watch/simulation_steps.csl";
+    let events = include_str!("../examples/signins.jsonl");
+    let grants = ["--grant", "workstation", "report:review"];
+    let output = run(&[&[file][..], &grants, &["--rank", "2"]].concat(), events);
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let records: Vec<serde_json::Value> = std::str::from_utf8(&output.stdout)
+        .unwrap()
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect();
+    let steps: Vec<_> = records
+        .iter()
+        .map(|record| record["step"].as_str().unwrap())
+        .collect();
+    assert_eq!(
+        steps,
+        [
+            "inspection",
+            "alert",
+            "simulated_isolate",
+            "simulated_execute"
+        ]
+    );
+    for record in [&records[0], &records[2], &records[3]] {
+        assert_eq!(record["target"], "workstation");
+        assert_eq!(record["timestamp"], 40);
+    }
+
+    let denied = run(&[file, "--rank", "2"], "not an event\n");
+    assert_eq!(denied.status.code(), Some(70));
+    assert!(denied.stdout.is_empty());
+    assert!(String::from_utf8_lossy(&denied.stderr).contains("requires grant"));
+
+    let ranks = [
+        ("7", "inspect", 6),
+        ("6", "isolate", 3),
+        ("3", "execute", 2),
+    ];
+    for (rank, operation, needed) in ranks {
+        let denied = run(&[&[file][..], &grants, &["--rank", rank]].concat(), events);
+        assert_eq!(denied.status.code(), Some(70));
+        assert!(
+            String::from_utf8_lossy(&denied.stderr)
+                .contains(&format!("{operation} requires Sequence {needed}"))
+        );
+    }
+}
+
+#[test]
+fn response_calls_require_a_configured_default_and_sequence_one_gates_incidents() {
+    let no_policy = run(
+        &[
+            "tests/watch/response_default.csl",
+            "--grant",
+            "workstation",
+            "report:review",
+            "--rank",
+            "2",
+        ],
+        include_str!("../examples/signins.jsonl"),
+    );
+    assert_eq!(no_policy.status.code(), Some(70));
+    assert!(no_policy.stdout.is_empty());
+    assert!(String::from_utf8_lossy(&no_policy.stderr).contains("no approved default response"));
+
+    let file = "tests/watch/ranked.csl";
+    let events = include_str!("watch/ranked_events.jsonl");
+    let args = [
+        file,
+        "--grant",
+        "workstation",
+        "report:review",
+        "--grant",
+        "other",
+        "report:review",
+        "--rank",
+        "2",
+        "--policy",
+        "tests/watch/ranked_policy.json",
+    ];
+    let denied = run(&args, events);
+    assert_eq!(denied.status.code(), Some(70));
+    assert!(String::from_utf8_lossy(&denied.stderr).contains("openIncident requires Sequence 1"));
+}

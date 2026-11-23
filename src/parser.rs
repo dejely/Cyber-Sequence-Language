@@ -27,6 +27,7 @@ pub struct Parser {
     tokens: Vec<Token>,
     current: usize, // Index of the next token to consume.
     function_depth: usize,
+    in_ability: bool,
 }
 
 impl Parser {
@@ -40,6 +41,7 @@ impl Parser {
             tokens,
             current: 0,
             function_depth: 0,
+            in_ability: false,
         }
     }
 
@@ -576,7 +578,10 @@ impl Parser {
     }
 
     pub fn primary(&mut self) -> Result<Expr, String> {
-        if self.match_token(&[TokenType::Identifier]) {
+        if self.match_token(&[TokenType::Identifier])
+            || (self.in_ability
+                && self.match_token(&[TokenType::Inspect, TokenType::Isolate, TokenType::Execute]))
+        {
             return Ok(Expr::Variable(self.previous().clone()));
         }
         if self.match_token(&[TokenType::False]) {

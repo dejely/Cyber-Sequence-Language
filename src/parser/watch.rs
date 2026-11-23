@@ -1,5 +1,5 @@
 use super::Parser;
-use crate::stmt::{AbilityDecl, WatchDecl, WatchSequence};
+use crate::stmt::{AbilityDecl, AbilityStep, WatchDecl, WatchSequence};
 use crate::token::{Literal, TokenType};
 
 impl Parser {
@@ -88,7 +88,10 @@ impl Parser {
             &TokenType::Sequence,
             "Expect 'sequence' after the capability clause.",
         )?;
-        let alerts = self.alert_sequence()?;
+        self.in_ability = true;
+        let steps = self.ability_sequence();
+        self.in_ability = false;
+        let steps = steps?;
         self.consume(
             &TokenType::RightBrace,
             "Expect '}' after ability declaration.",
@@ -97,8 +100,39 @@ impl Parser {
             name,
             target,
             capability,
-            alerts,
+            steps,
         })
+    }
+
+    fn ability_sequence(&mut self) -> Result<Vec<AbilityStep>, String> {
+        self.consume(&TokenType::LeftBrace, "Expect '{' after 'sequence'.")?;
+        let mut steps = Vec::new();
+        while !self.check(&TokenType::RightBrace) && !self.is_at_end() {
+            let step = if self.match_token(&[TokenType::Alert]) {
+                AbilityStep::Alert(self.alert_message()?)
+            } else if matches!(
+                self.peek().token_type(),
+                TokenType::Inspect | TokenType::Isolate | TokenType::Execute
+            ) && self
+                .tokens
+                .get(self.current + 1)
+                .is_some_and(|next| next.token_type() == &TokenType::Semicolon)
+            {
+                let keyword = self.advance().clone();
+                self.advance(); // semicolon
+                AbilityStep::Keyword(keyword)
+            } else if self.match_token(&[TokenType::Var]) {
+                AbilityStep::Statement(self.var_declaration(Vec::new())?)
+            } else {
+                AbilityStep::Statement(self.expression_statement()?)
+            };
+            steps.push(step);
+        }
+        if steps.is_empty() {
+            return Err(self.error("An ability sequence requires at least one step."));
+        }
+        self.consume(&TokenType::RightBrace, "Expect '}' after ability sequence.")?;
+        Ok(steps)
     }
 
     fn ability_input(&mut self, label: &str) -> Result<String, String> {
@@ -117,8 +151,7 @@ impl Parser {
         let mut alerts = Vec::new();
         loop {
             self.consume(&TokenType::Alert, "Expect 'alert' in the sequence.")?;
-            alerts.push(self.watch_string("alert message")?);
-            self.consume(&TokenType::Semicolon, "Expect ';' after alert message.")?;
+            alerts.push(self.alert_message()?);
             if !self.check(&TokenType::Alert) {
                 break;
             }
@@ -128,6 +161,12 @@ impl Parser {
             "Expect 'alert' or '}' after alert step.",
         )?;
         Ok(alerts)
+    }
+
+    fn alert_message(&mut self) -> Result<String, String> {
+        let message = self.watch_string("alert message")?;
+        self.consume(&TokenType::Semicolon, "Expect ';' after alert message.")?;
+        Ok(message)
     }
 
     fn watch_string(&mut self, label: &str) -> Result<String, String> {

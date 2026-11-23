@@ -1,13 +1,70 @@
 //! Replay normalized events through CSL watches and write alert records.
 
+mod ranked;
+
+use std::cell::RefCell;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::io::{self, BufRead, Write};
+use std::rc::Rc;
 
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 
 use crate::stmt::{AbilityDecl, WatchDecl, WatchSequence};
 
-pub type Grants<'a> = HashSet<(&'a str, &'a str)>;
+pub struct Options<'a> {
+    grants: HashSet<(&'a str, &'a str)>,
+    rank: u8,
+    policy: ranked::Policy,
+}
+
+impl Default for Options<'_> {
+    fn default() -> Self {
+        Self {
+            grants: HashSet::new(),
+            rank: 9,
+            policy: ranked::Policy::default(),
+        }
+    }
+}
+
+impl<'a> Options<'a> {
+    pub fn parse(mut args: &'a [String]) -> Result<Self, String> {
+        let mut options = Self::default();
+        while let Some((flag, rest)) = args.split_first() {
+            args = match (flag.as_str(), rest) {
+                ("--grant", [target, capability, tail @ ..])
+                    if crate::stmt::valid_grant_name(target)
+                        && crate::stmt::valid_grant_name(capability) =>
+                {
+                    options
+                        .grants
+                        .insert((target.as_str(), capability.as_str()));
+                    tail
+                }
+                ("--rank", [rank, tail @ ..]) => {
+                    options.rank = rank
+                        .parse::<u8>()
+                        .ok()
+                        .filter(|rank| *rank <= 9)
+                        .ok_or("Expected --rank <0..9>.")?;
+                    tail
+                }
+                ("--policy", [path, tail @ ..]) => {
+                    options.policy = ranked::Policy::load(path)?;
+                    tail
+                }
+                ("--rank", _) => return Err("Expected --rank <0..9>.".into()),
+                ("--policy", _) => return Err("Expected --policy <file>.".into()),
+                _ => return Err(
+                    "Expected --grant <target> <capability> with nonblank target and capability."
+                        .into(),
+                ),
+            };
+        }
+        Ok(options)
+    }
+}
 
 #[derive(Deserialize)]
 struct InputEvent {
@@ -36,26 +93,35 @@ struct SourceState<'a> {
     rules: Vec<RuleState<'a>>,
 }
 
+enum ResolvedSequence<'a> {
+    Inline(&'a [String]),
+    Named(&'a AbilityDecl),
+}
+
 struct RuleState<'a> {
     rule: &'a WatchDecl,
-    alerts: &'a [String],
-    timestamps: VecDeque<(i64, String)>,
+    sequence: ResolvedSequence<'a>,
+    events: VecDeque<WindowEntry>,
     counts: HashMap<String, usize>,
 }
 
+struct WindowEntry {
+    timestamp: i64,
+    group: String,
+    event: Option<Rc<InputEvent>>,
+}
+
 impl RuleState<'_> {
-    fn apply<'event>(&mut self, event: &'event InputEvent) -> Option<(&'event str, usize)> {
+    fn apply<'event>(&mut self, event: &'event Rc<InputEvent>) -> Option<(&'event str, usize)> {
         // The trailing window is (timestamp - window, timestamp].
         if let Some(cutoff) = event.timestamp.checked_sub(i64::from(self.rule.window)) {
             while self
-                .timestamps
+                .events
                 .front()
-                .is_some_and(|(time, _)| *time <= cutoff)
+                .is_some_and(|entry| entry.timestamp <= cutoff)
             {
-                let (_, group) = self
-                    .timestamps
-                    .pop_front()
-                    .expect("checked the queue front");
+                let WindowEntry { group, .. } =
+                    self.events.pop_front().expect("checked the queue front");
                 let count = self
                     .counts
                     .get_mut(&group)
@@ -74,7 +140,11 @@ impl RuleState<'_> {
             .fields
             .get(&self.rule.group_field)
             .filter(|key| !key.is_empty())?;
-        self.timestamps.push_back((event.timestamp, group.clone()));
+        self.events.push_back(WindowEntry {
+            timestamp: event.timestamp,
+            group: group.clone(),
+            event: matches!(self.sequence, ResolvedSequence::Named(_)).then(|| Rc::clone(event)),
+        });
         let count = self.counts.entry(group.clone()).or_default();
         *count += 1;
         // Only a single event was added, so equality marks a threshold crossing.
@@ -86,8 +156,9 @@ impl SourceState<'_> {
     fn replay_event(
         &mut self,
         source: &str,
-        event: &InputEvent,
+        event: &Rc<InputEvent>,
         line: usize,
+        session: &Rc<RefCell<ranked::Session>>,
         output: &mut impl Write,
     ) -> io::Result<()> {
         if let Some(previous) = self.last_timestamp
@@ -103,28 +174,51 @@ impl SourceState<'_> {
         }
         self.last_timestamp = Some(event.timestamp);
 
-        let mut emitted = false;
         for state in &mut self.rules {
-            if let Some((group_key, count)) = state.apply(event) {
-                for message in state.alerts {
-                    let record = AlertRecord {
-                        rule: state.rule.name.lexeme(),
-                        source,
-                        kind: &event.kind,
-                        group_key,
-                        timestamp: event.timestamp,
-                        count,
-                        step: "alert",
-                        message,
-                    };
-                    serde_json::to_writer(&mut *output, &record)?;
-                    writeln!(output)?;
-                    emitted = true;
+            let Some((group_key, count)) = state.apply(event) else {
+                continue;
+            };
+            match state.sequence {
+                ResolvedSequence::Inline(alerts) => {
+                    for message in alerts {
+                        let record = AlertRecord {
+                            rule: state.rule.name.lexeme(),
+                            source,
+                            kind: &event.kind,
+                            group_key,
+                            timestamp: event.timestamp,
+                            count,
+                            step: "alert",
+                            message,
+                        };
+                        write_record(output, &record)?;
+                    }
+                }
+                ResolvedSequence::Named(ability) => {
+                    let summary = json!({
+                        "rule": state.rule.name.lexeme(),
+                        "source": source,
+                        "kind": event.kind,
+                        "group_key": group_key,
+                        "timestamp": event.timestamp,
+                        "count": count,
+                        "target": ability.target
+                    });
+                    let matches = state
+                        .events
+                        .iter()
+                        .filter(|entry| entry.group == group_key)
+                        .filter_map(|entry| entry.event.as_deref())
+                        .map(|event| {
+                            json!({
+                                "source": source, "kind": event.kind,
+                                "timestamp": event.timestamp, "fields": event.fields
+                            })
+                        })
+                        .collect::<Vec<_>>();
+                    ranked::run(ability, summary, json!(matches), session, output)?;
                 }
             }
-        }
-        if emitted {
-            output.flush()?;
         }
         Ok(())
     }
@@ -133,7 +227,7 @@ impl SourceState<'_> {
 pub fn replay(
     watches: &[WatchDecl],
     abilities: &[AbilityDecl],
-    grants: &Grants<'_>,
+    options: Options<'_>,
     input: impl BufRead,
     mut output: impl Write,
 ) -> io::Result<()> {
@@ -144,8 +238,8 @@ pub fn replay(
     let mut sources: HashMap<&str, SourceState<'_>> = HashMap::new();
     for rule in watches {
         // Resolve and authorize every named sequence before reading any event.
-        let alerts = match &rule.sequence {
-            WatchSequence::Inline(alerts) => alerts,
+        let sequence = match &rule.sequence {
+            WatchSequence::Inline(alerts) => ResolvedSequence::Inline(alerts),
             WatchSequence::Named(reference) => {
                 let name = reference.lexeme();
                 let line = reference.line();
@@ -155,7 +249,10 @@ pub fn replay(
                         format!("[line {line}] Unknown ability '{name}'."),
                     )
                 })?;
-                if !grants.contains(&(ability.target.as_str(), ability.capability.as_str())) {
+                if !options
+                    .grants
+                    .contains(&(ability.target.as_str(), ability.capability.as_str()))
+                {
                     return Err(io::Error::new(
                         io::ErrorKind::PermissionDenied,
                         format!(
@@ -164,7 +261,7 @@ pub fn replay(
                         ),
                     ));
                 }
-                &ability.alerts
+                ResolvedSequence::Named(ability)
             }
         };
         sources
@@ -173,8 +270,8 @@ pub fn replay(
             .rules
             .push(RuleState {
                 rule,
-                alerts,
-                timestamps: VecDeque::new(),
+                sequence,
+                events: VecDeque::new(),
                 counts: HashMap::new(),
             });
     }
@@ -187,6 +284,10 @@ pub fn replay(
         None
     };
 
+    let session = Rc::new(RefCell::new(ranked::Session::new(
+        options.rank,
+        options.policy,
+    )));
     for (index, line) in input.lines().enumerate() {
         let number = index + 1;
         let line = line.map_err(|error| input_error(number, error))?;
@@ -197,8 +298,8 @@ pub fn replay(
         if !line.starts_with('{') {
             return Err(input_error(number, "expected a JSON event object"));
         }
-        let event: InputEvent =
-            serde_json::from_str(line).map_err(|error| input_error(number, error))?;
+        let event: Rc<InputEvent> =
+            Rc::new(serde_json::from_str(line).map_err(|error| input_error(number, error))?);
         let source = event.source.as_deref().or(default_source).ok_or_else(|| {
             input_error(
                 number,
@@ -211,9 +312,15 @@ pub fn replay(
         if event.kind.is_empty() {
             return Err(input_error(number, "event kind must be nonempty"));
         }
-        state.replay_event(source, &event, number, &mut output)?;
+        state.replay_event(source, &event, number, &session, &mut output)?;
     }
     Ok(())
+}
+
+fn write_record(output: &mut impl Write, record: &impl Serialize) -> io::Result<()> {
+    serde_json::to_writer(&mut *output, record)?;
+    writeln!(output)?;
+    output.flush()
 }
 
 fn input_error(line: usize, error: impl std::fmt::Display) -> io::Error {
